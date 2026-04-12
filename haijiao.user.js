@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name              海角社区
-// @version           1.2.9
+// @version           1.3.0
 // @description       海角社区🔥赠送多款脚本，不限次看海角社区完整时长付费视频，查看封禁内容、下载视频，复制播放链接，保存账号密码免输入，帖子是否有视频图片提示(标题前缀)，自动展开帖子，屏蔽广告等
 // @icon              https://dnn.xhus.cn/images/boy.jpeg
 // @namespace         海角社区
@@ -23,16 +23,12 @@
 // @include           */post/details/*
 // @match             *://*/post/details*
 // @include		      *://tools.thatwind.com/*
-// @include			  *://m3u8-player.com/*
 // @require           https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js
 // @require			  https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js
 // @run-at 			  document-start
-// @grant             unsafeWindow
 // @grant             GM_addStyle
 // @grant             GM_getValue
 // @grant             GM_setValue
-// @grant             GM_xmlhttpRequest
-// @connect 		  haijiao.live
 // @charset		      UTF-8
 // @antifeature       payment
 // @updateURL		  https://cdn.xysdjb.com/script/haijiao.user.js
@@ -40,40 +36,60 @@
 // @license           MIT
 // ==/UserScript==
 sessionStorage.setItem('pageOpen', '1');
-const iad = (h = true) =>{
+if (typeof jQuery === 'undefined') {
+	const script = document.createElement('script');
+	script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js';
+	script.onerror = function() {
+		alert('错误，jQuery 资源加载失败，请多次刷新页面试试，如刷新不能解决，请截图此错误给客服');
+	}
+	document.head.appendChild(script);
+}
+if (typeof Hls === 'undefined') {
+	const script = document.createElement('script');
+	script.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js';
+	script.onerror = function() {
+		alert('错误，Hls 资源加载失败，请多次刷新页面试试，如刷新不能解决，请截图此错误给客服');
+	}
+	document.head.appendChild(script);
+}
+if (location.href.includes('tools.thatwind.com')) {
+	GM_addStyle(`.top-ad{display: none !important;}`)
+	return
+}
+const iad = (h = true) => {
 	let roles = '';
-	if(superVip._CONFIG_.user && superVip._CONFIG_.user.roles){
-		if(superVip._CONFIG_.user.roles.length > 0 && superVip._CONFIG_.user.roles[0].e){
-			superVip._CONFIG_.user.roles.sort((a,b) =>{
-				return a.e < b.e? 1: -1
+	if (superVip._CONFIG_.user && superVip._CONFIG_.user.roles) {
+		if (superVip._CONFIG_.user.roles.length > 0 && superVip._CONFIG_.user.roles[0].e) {
+			superVip._CONFIG_.user.roles.sort((a, b) => {
+				return a.e < b.e ? 1 : -1
 			})
 		}
 		superVip._CONFIG_.user.roles.forEach(item => {
-			if(item.e){
-				if(item.e > 2047980427789){
+			if (item.e) {
+				if (item.e > 2047980427789) {
 					item.vip_day = '永久'
-				}else{
+				} else {
 					const time = item.e - Date.now()
-					if(time < 86400000 && time > 0){
-						if(time > 3600000){
+					if (time < 86400000 && time > 0) {
+						if (time > 3600000) {
 							item.vip_day = parseInt(time / 3600000) + '小时'
-						}else{
+						} else {
 							item.vip_day = parseInt(time / 60000) + '分钟'
 						}
-					}else if(time <= 0){
+					} else if (time <= 0) {
 						item.vip_day = '已过期'
 						item.expire = true
-					}else{
+					} else {
 						item.vip_day = parseInt(time / 86400000) + '天'
 						const d = time % 86400000
-						if(d > 3600000){
+						if (d > 3600000) {
 							item.vip_day += parseInt(d / 3600000) + '小时'
 						}
 					}
 				}
 			}
 			roles += `
-				<div class="info-box ${item.expire?'expire':''}" data-l="${item.l}">
+				<div class="info-box ${item.expire || item.s?'expire':''}" data-l="${item.l}">
 					<div class="avatar-box">
 						<img class="avatar" src="${(superVip._CONFIG_.user.cdnDomain? superVip._CONFIG_.user.cdnDomain: superVip._CONFIG_.cdnBaseUrl) + '/images/boy.jpeg'}"/>
 					</div>
@@ -87,49 +103,18 @@ const iad = (h = true) =>{
 				</div>
 			`;
 		})
-		if(h){
+		if (h) {
 			$('#wt-set-box .user-box-container .user-box .apps-container').empty()
 			$('#wt-set-box .user-box-container .user-box .apps-container').append(roles)
 		}
 		$('#wt-set-box .user-box-container .user-box .info-box').on('click', function(e) {
 			const l = e.currentTarget.attributes['data-l']?.value
-			if(l && l.startsWith('http')){
+			if (l && l.startsWith('http')) {
 				window.location.href = l
 			}
 		})
 	}
-	return h? '': roles
-}
-const axr = (u, m, p = {}) => {
-	return new Promise((res, rej) =>{
-		const request = {
-			method: m,
-			url: u,
-			onload: function(response) {
-				if(response.responseText){
-					let result = ''
-					try{
-						result = JSON.parse(response.responseText)
-					}catch(e){
-						result = response.responseText
-					}
-					res(result)
-				}else{
-					rej('请求失败_null')
-				}
-			},
-			onerror: function(e){
-				rej('请求失败_err')
-			},
-			ontimeout: function(e){
-				rej('请求超时')
-			}
-		}
-		
-		if(p.data) request.data = p.data;
-		if(p.headers) request.headers = p.headers;
-		GM_xmlhttpRequest(request);
-	})
+	return h ? '' : roles
 }
 const al = () => {
 	if ($('#wt-login-box').length > 0) {
@@ -190,11 +175,13 @@ const al = () => {
 		window.open(superVip._CONFIG_.homeUrl + '/#/pages/login/login')
 	})
 	$("#wt-login-box .to-index .wt-index").on("click", () => {
-		window.open(superVip._CONFIG_.homeUrl +'/#/')
+		window.open(superVip._CONFIG_.homeUrl + '/#/')
+	})
+	$("#wt-login-box input").on("focus", (e)=>{
+		$('.v-modal')?.click();
 	})
 	$("#wt-login-box .j-login-btn button").on("click", async () => {
-					
-		try{
+		try {
 			$('#wt-loading-box').css('display', 'block')
 			await sp(300);
 			$("#wt-login-box .j-login-btn button").addClass('btn-anima')
@@ -203,27 +190,32 @@ const al = () => {
 			}, 500)
 			const username = $("#wt-login-box input")[0].value;
 			let pwd = $("#wt-login-box input")[1].value;
-			if(!username || username.length < 5 || username.length > 15 || !/^[A-Za-z0-9]+$/.test(username)){
+			if (!username || username.length < 5 || username.length > 15 || !/^[A-Za-z0-9]+$/.test(
+					username)) {
 				setTimeout(() => {
 					$('#wt-loading-box').css('display', 'none')
 					st({
-						title: '账号错误，请使用' + superVip._CONFIG_.homeUrl.replace('https://','') + '网站注册的账号密码登入插件</br>' + superVip._CONFIG_.guide
+						title: '账号错误，请使用' + superVip._CONFIG_.homeUrl.replace(
+								'https://', '') + '网站注册的账号密码登入插件</br>' + superVip
+							._CONFIG_.guide
 					})
 				}, 2000)
 				return
 			}
-			if(!pwd || pwd.length < 5 || pwd.length > 15){
+			if (!pwd || pwd.length < 5 || pwd.length > 15) {
 				setTimeout(() => {
 					$('#wt-loading-box').css('display', 'none')
 					st({
-						title: '密码错误，请使用' + superVip._CONFIG_.homeUrl.replace('https://','') + '网站注册的账号密码登入插件</br>' + superVip._CONFIG_.guide
+						title: '密码错误，请使用' + superVip._CONFIG_.homeUrl.replace(
+								'https://', '') + '网站注册的账号密码登入插件</br>' + superVip
+							._CONFIG_.guide
 					})
 				}, 2000)
 				return
 			}
 
 			$.ajax({
-				url: (superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/l' + (Math.floor(Math.random() * 2) + 1) + '00/ls',
+				url: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) + '/api/l' + (Math.floor(Math.random() * 2) + 1) + '00/ls',
 				method: "POST",
 				timeout: 12000,
 				data: {
@@ -246,11 +238,12 @@ const al = () => {
 							avatar: response.data.user.avatar,
 							username: response.data.user.username,
 							nickname: response.data.user.nickname,
-							login_date: new Date().setHours(0,0,0,0),
+							login_date: new Date().setHours(0, 0, 0, 0),
 							token: response.data.token,
 							role: response.data.user.current_role,
 							roles: response.data.user.roles,
 							link: response.data.utilObj.link,
+							tk: response.data.utilObj.tk,
 							apiDomain: response.data.utilObj.apiDomain,
 							cdnDomain: response.data.utilObj.cdnDomain,
 							downloadTips: response.data.utilObj.downloadTips
@@ -259,19 +252,23 @@ const al = () => {
 						superVip._CONFIG_.user.ver = mx(superVip)
 						le()
 						GM_setValue('jsxl_user', res)
-						GM_setValue('jsxl_login_code', JSON.stringify({u: username, p: pwd}))
-						
-						if(response.data?.utilObj?.notify){
+						GM_setValue('jsxl_login_code', JSON.stringify({
+							u: username,
+							p: pwd
+						}))
+
+						if (response.data?.utilObj?.notify) {
 							const historyNotify = GM_getValue('notify')
-							if (!historyNotify || historyNotify != response.data.utilObj.notify) {
+							if (!historyNotify || historyNotify != response.data.utilObj
+								.notify) {
 								GM_setValue('notifyShow', true);
 								saht('wt_my_notify')
 								GM_setValue('notify', response.data.utilObj.notify)
 							}
 						}
-						
+
 						$('#wt-loading-box').css('display', 'none')
-						$('#wt-login-mask').css('display','none')
+						$('#wt-login-mask').css('display', 'none')
 						$("#wt-login-box").removeClass('show-set-box')
 						$("#wt-login-box").addClass('hid-set-box')
 						st({
@@ -284,17 +281,20 @@ const al = () => {
 				},
 				error: function(e) {
 					$('#wt-loading-box').css('display', 'none')
-					console.log(e)
 					st({
-						title: (superVip._CONFIG_.user.apiDomain ? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '网络延迟登录失败，请关掉梯子(vpn)再试或梯子尝试换港台地区节点再试，一般关掉梯子多试几次登录就行，' + superVip._CONFIG_.guide
+						title: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) +
+							'网络延迟登录失败，请关掉梯子(vpn)再试或梯子尝试换港台地区节点再试，一般关掉梯子多试几次登录就行，' +
+							superVip._CONFIG_.guide
 					})
 				}
 			});
-		}catch(e){
+		} catch (e) {
 			$('#wt-loading-box').css('display', 'block')
 			alert(e)
 			st({
-				title: (superVip._CONFIG_.user.apiDomain ? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '网络延迟登录失败2，请关掉梯子(vpn)再试或梯子尝试换港台地区节点再试，一般关掉梯子多试几次登录就行，' + superVip._CONFIG_.guide
+				title: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) +
+					'网络延迟登录失败2，请关掉梯子(vpn)再试或梯子尝试换港台地区节点再试，一般关掉梯子多试几次登录就行，' + superVip._CONFIG_
+					.guide
 			})
 		}
 	})
@@ -351,7 +351,7 @@ const mx = (s, type) => {
 }
 const ct = (t) => {
 	if (navigator.clipboard && window.isSecureContext) {
-			return navigator.clipboard.writeText(t);
+		return navigator.clipboard.writeText(t);
 	} else if (document.execCommand) {
 		const textArea = document.createElement('textarea');
 		textArea.style.position = 'fixed';
@@ -373,20 +373,31 @@ const ct = (t) => {
 		return Promise.reject(new Error('Clipboard API not supported and execCommand not available.'));
 	}
 }
+const hf = (t, k, h) => {
+	if (!t) return;
+	if (!Object.hasOwn(t, k)) return;
+	const r = t[k];
+	if (typeof r !== "function") return;
+	const f = r;
+	t[k] = function(...args) {
+		const origin = (...a) => f.apply(t, a);
+		return h.call(this, origin, ...args);
+	};
+}
 const ft = (d, p = false) => {
-	if (!d) return d
+	if (!d) return d;
 	if (superVip._CONFIG_.hjedd || typeof(d) == 'object') {
-		superVip._CONFIG_.hjedd = true
+		superVip._CONFIG_.hjedd = true;
 	} else {
-		d = JSON.parse(dc(d, p))
+		d = JSON.parse(dc(d, p));
 	}
 	if (!d || d == 'null') return superVip._CONFIG_.hjedd ? 'null' : 'WW01V2MySkJQVDA9'
 	if (!d.results) {
-		d.results = JSON.parse(JSON.stringify(d))
-		d.isList = true
+		d.results = JSON.parse(JSON.stringify(d));
+		d.isList = true;
 	}
 	d.results.forEach(item => {
-		let types = []
+		let types = [];
 		if (item.hasVideo && !superVip._CONFIG_.hjedd) types.push('video')
 		if (item.hasAudio && !superVip._CONFIG_.hjedd) types.push('audio')
 		if (item.hasPic && !superVip._CONFIG_.hjedd) types.push('img')
@@ -432,18 +443,19 @@ const cd = (c) => {
 	return sd
 }
 const serv = (s) => {
-	if (!s) { return ''; }
+	if (!s) {
+		return '';
+	}
 	try {
 		const item = ec.cskuecede(s.replace('9JSXL', ''));
-		if (typeof(item) != 'object') { return ''; }
+		if (typeof(item) != 'object') {
+			return '';
+		}
+		dl(item, item.des);
+		if (item.mu && item.mu.startsWith('http')) {
+			return item.mu;
+		}
 		let duration = '1.250000';
-		dl(item, ['std', 'du', 'ke', 'st'])
-		if(item.ke && item.ke.includes('store.huajitv.com')){
-			item.ke = item.ke.replace('store.huajitv.com', 'ms.gxkski.com')
-		}
-		if(item.st && item.st.includes('store.huajitv.com')){
-			item.st = item.st.replace('store.huajitv.com', 'ms.gxkski.com')
-		}
 		const countNum = item.std.split('-')[1] - item.std.split('-')[0];
 		try {
 			if (item.du && item.du > 40) {
@@ -457,13 +469,16 @@ const serv = (s) => {
 		m3u8Content += '#EXT-X-VERSION:3' + '\r\n';
 		m3u8Content += '#EXT-X-TARGETDURATION:11' + '\r\n';
 		m3u8Content += '#EXT-X-MEDIA-SEQUENCE:0' + '\r\n';
-		m3u8Content += '#EXT-X-KEY:METHOD=AES-128,URI="' + item.ke + (item.sign?item.sign: '') + '",IV=' + item.iv + '\r\n';
+		m3u8Content += '#EXT-X-KEY:METHOD=AES-128,URI="' + item.ke + (item.sign ? item.sign : '') + '",IV=' + item
+			.iv + '\r\n';
+
 		function formatToThreeDigits(number, length) {
-		    return number.toString().padStart(length, '0');
+			return number.toString().padStart(length, '0');
 		}
 		for (let i = Number(item.std.split('-')[0]); i <= countNum; i++) {
 			m3u8Content += '#EXTINF:' + duration + ',' + '\r\n';
-			m3u8Content += item.st + (item.ty==2? formatToThreeDigits(i, item.rep): i) + '.ts' + (item.sign?item.sign: '') + '\r\n';
+			m3u8Content += item.st + (item.ty == 2 ? formatToThreeDigits(i, item.rep) : i) + '.ts' + (item.sign ?
+				item.sign : '') + '\r\n';
 		}
 		m3u8Content += '#EXT-X-ENDLIST';
 		const file = new Blob([m3u8Content], {
@@ -488,131 +503,14 @@ const le = () => {
 	$('#wt-set-box .user-box-container .user-info .nickname').html(superVip._CONFIG_.user.nickname)
 	$('#wt-set-box .user-box-container .user-info .username').html(superVip._CONFIG_.user.username)
 }
-const gmu = async() => {
+const gmu = () => {
 	if (!superVip._CONFIG_.user.token) {
 		return 'not_login_jsxl';
 	}
-	if (superVip._CONFIG_.videoObj.url) {
-		if (superVip._CONFIG_.videoObj.url.startsWith('blob:http')) {
-			return superVip._CONFIG_.videoObj.url;
-		}
+	if (superVip._CONFIG_.videoObj.url && superVip._CONFIG_.videoObj.url.includes('http')) {
+		return superVip._CONFIG_.videoObj.url;
 	}
-	try {
-		if (!superVip._CONFIG_.videoObj.url || superVip._CONFIG_.videoObj.url.includes('err')) {
-			if (superVip._CONFIG_.videoObj.original) {
-				superVip._CONFIG_.videoObj.url = superVip._CONFIG_.videoObj.original;
-			} else {
-				return 'videoObj.url null:' + superVip._CONFIG_.videoObj.url;
-			}
-		}
-		if (!superVip._CONFIG_.videoObj.url.startsWith('http') && !superVip._CONFIG_.videoObj.url.startsWith(
-				'/api')) {
-			superVip._CONFIG_.videoObj.url = superVip._CONFIG_.videoObj.original;
-		}
-		if (!superVip._CONFIG_.videoObj.initAes) {
-			for (let i = 0; i < 8; i++) {
-				await sp(1000);
-				if (superVip._CONFIG_.videoObj.initAes) {
-					break;
-				}
-			}
-		}
-		if (superVip._CONFIG_.videoObj.aes) {
-			const url = serv(superVip._CONFIG_.videoObj.aes.replace(superVip._CONFIG_.videoObj.aes.substring(superVip._CONFIG_.videoObj.aes.length - 5), ''));
-			if (url){
-				return url
-			}
-		}
-		try {
-			const checkVideoRes = await ah((superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo', 15000, true, {
-				post: 1,
-				data: {
-					sign: ec.knxkbxen(superVip._CONFIG_.videoObj.pid),
-					origin: superVip._CONFIG_.hjedd ? 1 :2,
-					timestamp: ec.knxkbxen(Date.now()),
-					version: superVip._CONFIG_.version
-				}
-			});		
-			if (checkVideoRes.errMsg == 'success') {
-				const res = JSON.parse(checkVideoRes.responseText);
-				if(res.newToken){
-					if(res.newToken) superVip._CONFIG_.user.token = res.newToken;
-					GM_setValue('jsxl_user', superVip._CONFIG_.user)
-				}
-				if (res.errCode == 0) {
-					saht('wt_player_haijiao');
-					superVip._CONFIG_.videoObj.downloadUrl = res.downloadUrl;
-					const url = serv(res.data.replace(res.data.substring(res.data.length - 5), ''));
-					if (url) return url;
-				} else {
-					if(res.errMsg != 'not exists'){
-						return res.errMsg || res.error.message;
-					}
-				}
-			}else{
-				return checkVideoRes.errMsg || '请求失败，请刷新页面再试';
-			}
-		} catch (e) {
-			return e;
-		}
-		return '抱歉，解析失败，请刷新页面再试。'
-		
-		if (superVip._CONFIG_.hjedd) {
-			let res = ''
-			try {
-				const reg = /.+\/(mp4|video)\//.exec(superVip._CONFIG_.videoObj.url);
-				if (reg && reg.length > 1) {
-					superVip._CONFIG_.videoObj.key = reg[0];
-				}
-				res = await ah(superVip._CONFIG_.videoObj.url, 15000, false);
-			
-			} catch (e) {
-				return 'res.responseText null:2 error';
-			}
-			if (!res.responseText) {
-				return 'res.responseText null error:' + res;
-			}
-			if (cd(res.responseText) > 35) {
-				return ctu(res.responseText);
-			} else {
-				return await as(res.responseText);
-			}
-
-		} else {
-			const res = await ah(location.origin + superVip._CONFIG_.videoObj.url, 15000);
-			if (res.errMsg != 'success' || res.responseText.length < 30) {
-				return 'err';
-			}
-			const lines = res.responseText.split('\n');
-			let commonUrl = fcs(lines[6], lines[8]);
-			if (!commonUrl) {
-				return 'err';
-			}
-			const m3u8Res = await ah((superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/formatVideoInfo?sign=' + ec
-				.knxkbxen(commonUrl) + '&pid=' + ec.knxkbxen(superVip._CONFIG_.videoObj.pid) +
-				'&uid=' + ec.knxkbxen(superVip._CONFIG_.videoObj.uid) + '&duration=' + ec.knxkbxen(superVip._CONFIG_.videoObj.duration) + '&release_date=' + superVip._CONFIG_.videoObj.release_date + '&timestamp=' + ec.knxkbxen(Date.now()) + '&origin=' + location.origin,
-				15000);
-			if (m3u8Res.errMsg != 'success') {
-				return 'err';
-			}
-			const result = JSON.parse(m3u8Res.responseText);
-			if(result.newToken){
-				if(result.newToken) superVip._CONFIG_.user.token = result.newToken;
-				GM_setValue('jsxl_user', superVip._CONFIG_.user)
-			}
-			if (result.errCode != 0) {
-				return result.errMsg;
-			}
-			saht('wt_player_haijiao');
-			superVip._CONFIG_.videoObj.aes = result.data;
-			superVip._CONFIG_.videoObj.downloadUrl = result.downloadUrl;
-			return serv(result.data.replace(result.data.substring(result.data.length - 5),
-				''));
-		}
-	} catch (e) {
-		alert(JSON.stringify(e));
-		return 'err'
-	}
+	return 'err'
 }
 const sto = (c) => {
 	const lines = c.split('\n');
@@ -620,29 +518,143 @@ const sto = (c) => {
 	item.iv = /IV=(.+)/.exec(lines[4])[1];
 	item.start_url = fcs(lines[6], lines[8]);
 	const enckeyReg = /URI="(.+)"/.exec(lines[4]);
-	if(!enckeyReg[1].startsWith('http')){
-		if(superVip._CONFIG_.videoObj.key){
+	if (!enckeyReg[1].startsWith('http')) {
+		if (superVip._CONFIG_.videoObj.key) {
 			item.keyUrl = superVip._CONFIG_.videoObj.key + enckeyReg[1];
-		}else{
+		} else {
 			item.keyUrl = /(.+\/).*$/.exec(item.start_url)[1] + enckeyReg[1];
 		}
-	}else{
+	} else {
 		item.keyUrl = enckeyReg[1];
 	}
-	item.str_end = lines[6].replace(item.start_url,'').split('.ts')[0] + '-' + lines[lines.length-3].replace(item.start_url,'').split('.ts')[0];
+	item.str_end = lines[6].replace(item.start_url, '').split('.ts')[0] + '-' + lines[lines.length - 3].replace(item
+		.start_url, '').split('.ts')[0];
 	item.uid = superVip._CONFIG_.videoObj.uid;
 	item.pid = superVip._CONFIG_.videoObj.pid;
 	item.release_date = superVip._CONFIG_.videoObj.release_date;
-	item.duration = parseInt(superVip._CONFIG_.videoObj.duration?superVip._CONFIG_.videoObj.duration: cd(c))
+	item.duration = parseInt(superVip._CONFIG_.videoObj.duration ? superVip._CONFIG_.videoObj.duration : cd(c))
 	item.origin = location.origin;
 	return ec.knxkbxen(item)
 }
 const dl = (o, l) => {
-	l.forEach(i =>{
-		if(o[i]){
+	l.forEach(i => {
+		if (o[i]) {
 			o[i] = ec.cskuecede(o[i])
 		}
 	})
+}
+const ve = () => {
+	const dataUrl = `data:image/svg+xml,${encodeURIComponent(superVip._CONFIG_.videoObj.svg)}`;
+	const isExist = document.querySelector('#wt-captcha-box');
+	if (isExist) {
+		$('#wt-captcha-box .svg').attr('src', dataUrl);
+		$('#wt-captcha-mask').css('display', 'block');
+		$("#wt-captcha-box").removeClass('hid-set-box');
+		$("#wt-captcha-box").addClass('show-set-box');
+	} else {
+		$('body').append(`
+			<div id="wt-captcha-mask"></div>
+			<div id="wt-captcha-box">
+				<div class="logo">
+					<p>@${superVip._CONFIG_.homeUrl.replace('https://','')}</p>
+					<p>v ${superVip._CONFIG_.version}</p>
+				</div>
+				<div class="close"></div>
+				<div class="title">人机验证</div>
+				<img class= "svg" src=${dataUrl}></img>
+				<div class="tips">tips: 验证码不区分大小写，如需刷新验证码请刷新页面</div>
+				<div class="input-box" style="margin-top:10px;">
+					<input type="text" placeholder="请输入验证码" maxLength="4"/>
+				</div>
+				<div class="j-login-btn">
+					<button >验证</button>
+				</div>
+			</div>
+		`)
+		GM_addStyle(`
+			#wt-captcha-mask{ display: block;position: fixed;top: 0;left: 0;right: 0;bottom: 0;z-index: 11000;background-color: #0000004d;}
+			#wt-captcha-box{ position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(1); width: 80%;padding: 10px 5px;background-color: white;border-radius: 10px;z-index: 11010;}
+			#wt-captcha-box .logo{position: absolute;top: 5%;left: 1%; color: #dbdbdb; font-size: 11px;transform: rotate(-15deg);text-align: center;z-index: -10;}
+			#wt-captcha-box .close{position: absolute;right: 0px;top: 0px;width: 40px;height: 40px;}
+			#wt-captcha-box .close::before,#wt-captcha-box .close::after{position: absolute;left: 50%;top: 50%;content: '';width: 16px;height: 2px;border-radius: 1px;background-color: #222;transform: translate(-50%,-50%) rotate(45deg);}
+			#wt-captcha-box .close::after,#wt-captcha-box .close::after{transform: translate(-50%,-50%) rotate(-45deg);}
+			#wt-captcha-box .tips{padding: 5px 10px;font-size: 12px;margin: auto;box-sizing: border-box;width: 90%;letter-spacing: 1px;margin-top: 5px;color: #a68113;}
+			#wt-captcha-box .svg{ display: block; margin: 0 auto;border-radius: 5px;width: 90%;}
+			#wt-captcha-box .title{font-weight: 600;font-size: 16px;color: #3a3a3a;text-align: center;margin-bottom: 20px;}
+			#wt-captcha-box .input-box{display: flex;margin: auto;background-color: #f5f5f5;width: 160px;height: 35px;border-radius: 30px;overflow: hidden;font-size: 12px;}
+			#wt-captcha-box .input-box input{width: 100%;height: 100%;padding-left: 15px;box-sizing: border-box;outline: none;border: none;background-color: #f5f5f5;font-size: 11px;color: black;letter-spacing: 1px;}
+			#wt-captcha-box input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none !important; }
+			#wt-captcha-box .j-login-btn{width: 100px;padding: 2px;height: 40px;font-size: 12px;margin: 10px auto;margin-bottom: 0;}
+			#wt-captcha-box .j-login-btn button{width: 100%;height: 100%;border-radius: 30px;border: none;color: white;transition: all 0.3s ease;background-color: #00bcd4;}
+		`);
+		$("#wt-captcha-box").removeClass('hid-set-box');
+		$("#wt-captcha-box").addClass('show-set-box');
+		$("#wt-captcha-box .close").on("click", () => {
+			$('#wt-captcha-mask').css('display', 'none');
+			$("#wt-captcha-box").removeClass('show-set-box');
+			$("#wt-captcha-box").addClass('hid-set-box');
+		})
+		$("#wt-captcha-box .j-login-btn").on("click", async () => {
+			$('#wt-loading-box').css('display', 'block');
+			await sp(300);
+			const val = $("#wt-captcha-box input")[0].value;
+			if (!/^[A-Za-z\d]{4}$/.test(val)) {
+				setTimeout(() => {
+					$('#wt-loading-box').css('display', 'none');
+					st({
+						title: '验证码错误'
+					});
+				}, 2500)
+				return;
+			} else {
+				$("#wt-captcha-box").removeClass('show-set-box');
+				$("#wt-captcha-box").addClass('hid-set-box');
+				$.ajax({
+					url: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo',
+					method: 'POST',
+					timeout: 8000,
+					headers: {
+						'luckyToken': superVip._CONFIG_.user.token,
+						'Content-Type': 'application/json'
+					},
+					data: JSON.stringify({
+						sign: ec.knxkbxen(superVip._CONFIG_.videoObj.pid),
+						origin: superVip._CONFIG_.hjedd ? 1 : 2,
+						timestamp: ec.knxkbxen(Date.now()),
+						version: superVip._CONFIG_.version,
+						url: ec.knxkbxen(superVip._CONFIG_.videoObj.url),
+						du: ec.knxkbxen(superVip._CONFIG_.videoObj.duration),
+						captcha: val.toLowerCase(),
+						captchaSign: superVip._CONFIG_.videoObj.svgSign
+					}),
+					success: async function(response) {
+						$('#wt-loading-box').css('display', 'none');
+						$('#wt-captcha-mask').css('display', 'none');
+						if (response.errCode == 102 && response.data) {
+							superVip._CONFIG_.user.token = response.data.split('，errId')[0];
+							GM_setValue('jsxl_user', superVip._CONFIG_.user);
+						}
+						st({
+							title: response.errMsg,
+							success: (e) => {
+								window.location.reload();
+							}
+						})
+					},
+					error: function(xhr, status, error) {
+						$('#wt-loading-box').css('display', 'none');
+						$('#wt-captcha-mask').css('display', 'none');
+						st({
+							title: '网络错误',
+							success: (e) => {
+								window.location.reload()
+							}
+						})
+					}
+				})
+			}
+		})
+	}
 }
 const fv = (d) => {
 	if (!d) return d;
@@ -665,7 +677,7 @@ const fv = (d) => {
 			superVip._CONFIG_.videoObj.type = 0;
 			saht('wt_player_haijiao');
 		} else {
-			if(!superVip._CONFIG_.videoObj.url || superVip._CONFIG_.videoObj.url == 'null'){
+			if (!superVip._CONFIG_.videoObj.url || superVip._CONFIG_.videoObj.url == 'null') {
 				superVip._CONFIG_.videoObj.url = video.remoteUrl;
 			}
 			if (!superVip._CONFIG_.videoObj.type) {
@@ -706,7 +718,8 @@ const sdw = (s = true, m) => {
 	}
 	$('#wt-mask-box').css('display', 'block');
 	if (!document.querySelector('#wt-download-box')) {
-		let items = `<li class="item" data-url="${superVip._CONFIG_.videoObj.downloadUrlSign}" data-type="copy" style="background-color: #00bcd4;color:#e0e0e0;">复制链接</li>`
+		let items =
+			`<li class="item" data-url="${superVip._CONFIG_.videoObj.downloadUrlSign}" data-type="copy" style="background-color: #00bcd4;color:#e0e0e0;">复制链接</li>`
 		superVip._CONFIG_.downUtils.forEach((item, index) => {
 			items += `
 				<li class="item" data-url="${item.url + superVip._CONFIG_.videoObj.downloadUrlSign}">${item.title}</li>
@@ -721,37 +734,46 @@ const sdw = (s = true, m) => {
 		`)
 	} else {
 		$('#wt-download-box').empty()
-		let items = `<li class="item" data-url="${superVip._CONFIG_.videoObj.downloadUrlSign}" data-type="copy" style="background-color: #00bcd4;color:#e0e0e0;">复制链接</li>`
+		let items =
+			`<li class="item" data-url="${superVip._CONFIG_.videoObj.downloadUrlSign}" data-type="copy" style="background-color: #00bcd4;color:#e0e0e0;">复制链接</li>`
 		superVip._CONFIG_.downUtils.forEach((item, index) => {
 			items += `
 				<li class="item" data-url="${item.url + superVip._CONFIG_.videoObj.downloadUrlSign}">${item.title}</li>
 			`
 		})
-		$('#wt-download-box').append(`<view class="close"></view><div class="tips">* ${m?m + '(刷新页面或打开其它帖子链接将丢失，特长的链接有效期60分钟)': '刷新页面或打开其它帖子链接将丢失，特长的链接有效期60分钟'}</div><ul>${items}</ul>`)
+		$('#wt-download-box').append(
+			`<view class="close"></view><div class="tips">* ${m?m + '(刷新页面或打开其它帖子链接将丢失，特长的链接有效期60分钟)': '刷新页面或打开其它帖子链接将丢失，特长的链接有效期60分钟'}</div><ul>${items}</ul>`
+		)
 	}
-	if(superVip._CONFIG_.isMobile && superVip._CONFIG_.isMobile[0] == 'iPhone'){
-		$('#wt-download-box ul')[0].innerHTML += `<li class="item" data-open="1" data-url="https://apps.apple.com/cn/app/m3u8-mpjex/id6449724938">苹果视频下载软件</li>`
+	if (superVip._CONFIG_.isMobile && superVip._CONFIG_.isMobile[0] == 'iPhone') {
+		$('#wt-download-box ul')[0].innerHTML +=
+			`<li class="item" data-open="1" data-url="https://apps.apple.com/cn/app/m3u8-mpjex/id6449724938">苹果视频下载软件</li>`
 	}
-	if(superVip._CONFIG_.isMobile && superVip._CONFIG_.isMobile[0] == 'Android'){
-		$('#wt-download-box ul')[0].innerHTML += `<li class="item" data-open="1" data-url="https://wwjf.lanzoul.com/isifQ18id4fa">安卓视频下载软件(密3y3a)</li>`
+	if (superVip._CONFIG_.isMobile && superVip._CONFIG_.isMobile[0] == 'Android') {
+		$('#wt-download-box ul')[0].innerHTML +=
+			`<li class="item" data-open="1" data-url="https://wwjf.lanzoul.com/isifQ18id4fa">安卓视频下载软件(密3y3a)</li>`
 	}
-	
+
 	$("#wt-download-box").removeClass('hid-set-box');
 	$("#wt-download-box").addClass('show-set-box');
 	$("#wt-download-box .item").on('click', function(e) {
 		const url = e.target.dataset.url
-		if(e.target.dataset.type == 'copy'){
-			if(url){
+		if (e.target.dataset.type == 'copy') {
+			if (url) {
 				ct(url).then(res => {
 					st({
 						title: '视频地址复制成功，请尽快使用'
 					})
-				}).catch(err =>{
+				}).catch(err => {
+					$('#wt-tips-box').css('width', '100%');
 					st({
-						title: '复制失败，请通过下面在线下载再复制输入框内的视频地址'
+						title: '复制失败，请通过下面在线下载再复制输入框内的视频地址' + url,
+						success: () => {
+							$('#wt-tips-box').css('width', '240px');
+						}
 					})
 				})
-			}else{
+			} else {
 				st({
 					title: '抱歉，未检测到视频'
 				})
@@ -776,323 +798,285 @@ const sdw = (s = true, m) => {
 		$("#wt-mask-box").click()
 	})
 }
+const iv = () => {
+	fte(document.body, "#wt-resources-box").then(() =>{
+		const box = document.getElementById("wt-resources-box");
+		let btn = '';
+		try {
+			const vue = document.querySelector("#app").__vue__;
+			vue.$store.state.isLogin = true;
+			if (!vue.$cookies.get("token")){
+				vue.$cookies.set("token", "xysdxysdxysdxysd");
+			}
+		} catch (e) {}
+		if (document.querySelector('#app')?.__vue__?.$store?.state?.videoData) {
+			btn = '.video-div-btn';
+			const video = box.querySelector('.video-div');
+			if (video) {
+				const newVideo = document.createElement('video');
+				newVideo.controls = true;
+				newVideo.style.width = '100%';
+				newVideo.style.height = '500px';
+				newVideo.style.backgroundColor = "black";
+				const hls = new Hls({
+					enableWorker: true,
+					lowLatencyMode: true
+				});
+				hls.loadSource(superVip._CONFIG_.videoObj.url);
+				hls.attachMedia(newVideo);
+				video.replaceWith(newVideo);
+			}
+		} else {
+			btn = '.video-url-list';
+			box.addEventListener("click", () => {
+				document.querySelector("#app").__vue__.$store.commit("updateVideo", {
+					videoShow: true,
+					videoUrl: superVip._CONFIG_.videoObj.url,
+					videoImg: void 0,
+					videoId: superVip._CONFIG_.videoObj.pid
+				});
+			});
+			GM_addStyle(`#wt-resources-box::after{content: "";position: absolute;top: 0;left: 0;width: 100%;height: 100%;}`)
+		}
+		const sell1 = box.querySelector('.sell_line1');
+		const sell2 = box.querySelector('.sell_line2');
+		if (sell1 && sell2) {
+			const newSell1 = document.createElement("span");
+			newSell1.className = sell1.className;
+			newSell1.style.color = "#308ee3";
+			newSell1.style.display = "block";
+			newSell1.textContent = sell1.innerText;
+			sell1.replaceWith(newSell1);
+			const newSell2 = document.createElement("span");
+			newSell2.className = sell2.className;
+			newSell2.style.color = "red";
+			newSell2.style.display = "block";
+			newSell2.style.margin = "20px 0";
+			newSell2.textContent = "此视频已解析" + (superVip._CONFIG_.videoObj.duration ?
+				` [视频时长${(h=Math.floor(superVip._CONFIG_.videoObj.duration/3600))?h+'时':''}${(m=Math.floor(superVip._CONFIG_.videoObj.duration%3600/60))?m+'分':''}${superVip._CONFIG_.videoObj.duration%60}秒] ` :
+				'') + ",请点击播放";
+			sell2.replaceWith(newSell2);
+			if (btn) {
+				box.querySelector(btn).remove();
+			}
+		}
+	})
+}
+const xo = (x, m) =>{
+	const getter = Object.getOwnPropertyDescriptor(
+		XMLHttpRequest.prototype,
+		"response"
+	).get;
+	Object.defineProperty(x, "responseText", {
+		get: () => {
+			const result = getter.call(x);
+			try{
+				return m(getter.call(x));
+			}catch(e){
+				console.log('发生异常! 解析失败!');;
+				console.log(e);
+				return result;
+			}
+		}
+	});
+	
+}
 const ri = () => {
 	const originOpen = XMLHttpRequest.prototype.open;
 	XMLHttpRequest.prototype.open = function(method, url) {
-		this.ontimeout = function() {
-			window.location.reload()
-		}
 		if (superVip._CONFIG_.user && superVip._CONFIG_.user.token) {
-			if (/\/api\/banner\/banner_list/.test(url)) {
-				this.abort()
-			}
-			if (/\/api\/topic\/hot\/topics\?/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
-				const xhr = this;;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							res.data = ft(res.data);
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
-				});
-			}
-			
-			if (/\/api\/topic\/search/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
-				;
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							res.data = ft(res.data);
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');;
-							console.log(e);
-							return result;
-						}
-					},
-				});
-			}
-			
 			if (/\/api\/topic\/\d+/.test(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							res.data = md(res.data)
-							if(res.data){
-								return JSON.stringify(res, `utf-8`);
-							}else{
-								return result;
-							}
-						} catch (e) {
-							alert(e)
-							console.log('发生异常! 解析失败!');;
-							console.log(e);
-							return result;
-						}
-					},
-				});
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					res.data = md(res.data)
+					if (res.data) {
+						return JSON.stringify(res, `utf-8`);
+					} else {
+						return result;
+					}
+				})
+				fl();
+				originOpen.call(this, method, url);
+				return;
 			}
 			
+			if (/\/api\/topic\/((node|hot)\/(topics|news)|idol_list)/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					res.data = ft(res.data, url.includes('api/topic/idol_list') || url.includes('api/topic/node/topics'));
+					return JSON.stringify(res, `utf-8`);
+				})
+				fl();
+				originOpen.call(this, method, url);
+				return;
+			}
+			
+			if (/\/api\/(favorite\/v2\/folderList|user\/(current|favorite\/users)|topic\/(like|foot\/topics))/.test(url)){
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					if(res.errorCode == 0){
+						return result;
+					}else{
+						res.isEncrypted = true;
+						res.errorCode = 0;
+						res.message = "";
+						res.success = true;
+						res.data = /\/api\/(user\/current|topic\/like)/.test(url)? jec({}) : jec([]);
+						return JSON.stringify(res, `utf-8`);
+					}
+				})
+				originOpen.call(this, method, url);
+				return;
+			}
+			
+			if (/\/api\/video\/checkVideoCanPlay/.test(url)) {
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					res.data = fv(res.data);
+					return JSON.stringify(res, `utf-8`);
+				})
+				originOpen.call(this, method, url);
+				return;
+			}		
+			
+			if (/\/api\/video\/user_list\?/.test(url)){
+				xo(this, (result) =>{
+					return JSON.stringify({
+					    "isEncrypted": true,
+					    "errorCode": 0,
+					    "message": "",
+					    "success": true,
+					    "data": "WW01V2MySkJQVDA9"
+					}, `utf-8`);
+				})
+				originOpen.call(this, method, url);
+				return;
+			}
+
+			if (/\/api\/topic\/search/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					res.data = ft(res.data);
+					return JSON.stringify(res, `utf-8`);
+				})
+				originOpen.call(this, method, url);
+				return;
+			}
+			
+			if(/\/api\/(video|user)\/search/.test(url)){
+				xo(this, (result) =>{
+					const res = JSON.parse(result);
+					if(res.message && res.message.includes('登录')){
+						st({ title: '请登录海角官方账号后再搜索,需要去登录页面吗?', doubt: true,
+							success: (r)=>{
+								if(r){
+									location.href = location.origin + '/login';
+								}
+							}
+						});
+					}
+					return result;
+				})
+				originOpen.call(this, method, url);
+				return;
+			}
+
 			if (/\/api\/attachment/.test(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							if (res.data) {
-								res.data = fv(res.data);
-							}
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');;
-							console.log(e);
-							return result;
-						}
-					},
-				});
+				xo(this, (result) =>{
+					let res = JSON.parse(result, `utf-8`);
+					if (res.data) {
+						res.data = fv(res.data);
+					}else{
+						res = {isEncrypted:true,errorCode:0,message: "",success: true,data:superVip._CONFIG_.videoObj.attachment || 1}
+					}
+					return JSON.stringify(res, `utf-8`);
+				})
+				originOpen.call(this, method, url);
+				return;
 			}
-			
-			if (/\/api\/topic\/(node\/(topics|news)|idol_list)/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							res.data = ft(res.data, url.includes('api/topic/idol_list') || url.includes('api/topic/node/topics'))
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
-				});
-			}
-			
+
 			if (/\/api\/user\/(info\/(\d+))|current/.exec(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							const regRes = /\/api\/user\/(info\/(\d+))|current/
-								.exec(
-									url);
-							const uid = sessionStorage.getItem('uid');
-							if (regRes.length > 2 && (regRes[2] && regRes[2] != uid) && res.message.includes('禁')) {
-								const user =  {
-									'isFavorite': false,
-									'likeCount': 12,
-									'user': {
-										'id': parseInt(regRes[2]),
-										'nickname': '被封禁账号',
-										'avatar': '0',
-										'description': `该账号已被封禁`,
-										'topicCount': 100,
-										'videoCount': 0,
-										'commentCount': 303,
-										'fansCount': 57,
-										'favoriteCount': 39,
-										'status': 0,
-										'sex': 1,
-										'vip': 0,
-										'vipExpiresTime': '0001-01-01 00:00:00',
-										'certified': false,
-										'certVideo': false,
-										'certProfessor': false,
-										'famous': false,
-										'forbidden': false,
-										'tags': null,
-										'role': 0,
-										'popularity': 10,
-										'diamondConsume': 0,
-										'title': {
-											'id': 0,
-											'name': '',
-											'consume': 0,
-											'consumeEnd': 0,
-											'icon': "https://hjpic.hjpfe1.com/hjstore/system/node/usertitle2.png?ver=1654590917"
-										},
-										'friendStatus': false,
-										'voiceStatus': false,
-										'videoStatus': false,
-										'voiceMoneyType': 0,
-										'voiceAmount': 0,
-										'videoMoneyType': 0,
-										'videoAmount': 0,
-										'depositMoney': 0
+				xo(this, (result) =>{
+					const isUserList = location.pathname.endsWith('/user/attention');
+					let res = JSON.parse(result, `utf-8`);
+					const regRes = /\/api\/user\/(info\/(\d+))|current/
+						.exec(
+							url);
+					const uid = sessionStorage.getItem('uid');
+					if (regRes.length > 2 && (regRes[2] && regRes[2] != uid) && res.message
+						.includes('禁')) {
+						st({
+							title: '此博主已被海角官方封禁，是否前往盗版海角查看此封禁博主帖子?',
+							doubt: true,
+							success: (res) => {
+								if (res) {
+									if(isUserList){
+										window.open(ec.cskuecede(superVip._CONFIG_.user.link) + '/user/userinfo?uid=' + regRes[2]);
+									}else{
+										window.open(location.href.replace(
+											/.+\/\/[^\/]+/, ec.cskuecede(
+												superVip._CONFIG_.user.link)
+										));
 									}
 								}
-								res.isEncrypted = true;
-								res.errorCode = 0;
-								res.success = true;
-								res.message = "";
-								res.data = jec(user, 'plus');
-								st({
-									title: '此博主已被海角官方封禁，是否前往盗版海角查看此封禁博主帖子?',
-									doubt: true,
-									success: (res)=>{
-										if(res){
-											window.open(location.href.replace(/.+\/\/[^\/]+/, ec.cskuecede(superVip._CONFIG_.user.link)));
-										}
-									}
-								})
 							}
-							if(regRes[2] == uid || location.href.includes('/user/myinfo')){
-								res.data = lt(res.data);
-							}
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
-				});
-			}
-			
-			if (/api\/login\/signin/.test(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							if (res.success) {
-								const username = document.querySelector(
-									'input[placeholder="请输入用户名/邮箱"],input[placeholder="请输入用户名"]'
-									).value
-								const pwd = document.querySelector(
-									'input[type="password"]').value
-								if (username && pwd) {
-									GM_setValue('haijiao_userpwd', {
-										username,
-										pwd
-									})
-								}
-								fte(
-										'.van-dialog__cancel,.el-button--small', 7)
-									.then(res => {
-										res.click()
-									})
-							} else {
-								st({
-									title: res.message
-								})
-							}
-							res.data = lt(res.data);
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
-				});
-			}
-			
-			if (/api\/video\/checkVideoCanPlay/.test(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							res.data = fv(res.data);
-							return JSON.stringify(res, `utf-8`);
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
+						})
+					}
+					if (regRes[2] == uid || location.href.includes('/user/myinfo')) {
+						res.data = lt(res.data);
+					}
+					return JSON.stringify(res, `utf-8`);
 				})
+				originOpen.call(this, method, url);
+				return;
+			}
+
+			if (/\/api\/login\/signin/.test(url)) {
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					if (res.success) {
+						const username = document.querySelector(
+							'input[placeholder="请输入用户名/邮箱"],input[placeholder="请输入用户名"]'
+						).value
+						const pwd = document.querySelector(
+							'input[type="password"]').value
+						if (username && pwd) {
+							GM_setValue('haijiao_userpwd', {
+								username,
+								pwd
+							})
+						}
+					} else {
+						st({
+							title: res.message
+						})
+					}
+					res.data = lt(res.data);
+					return JSON.stringify(res, `utf-8`);
+				})
+				originOpen.call(this, method, url);
+				return;
+			}
+
+			if (/\/api\/login\/signup/.test(url)) {
+				xo(this, (result) =>{
+					const res = JSON.parse(result, `utf-8`);
+					if (!res.success) {
+						st({
+							title: res.message
+						})
+					}
+					return result;
+				})
+				originOpen.call(this, method, url);
+				return;
 			}
 			
-			if (/api\/login\/signup/.test(url)) {
-				const xhr = this;
-				const getter = Object.getOwnPropertyDescriptor(
-					XMLHttpRequest.prototype,
-					"response"
-				).get;
-				Object.defineProperty(xhr, "responseText", {
-					get: () => {
-						let result = getter.call(xhr);
-						try {
-							let res = JSON.parse(result, `utf-8`);
-							if (!res.success) {
-								st({
-									title: res.message
-								})
-							}
-							return result
-						} catch (e) {
-							console.log('发生异常! 解析失败!');
-							console.log(e);
-							return result;
-						}
-					},
-				})
+			if(/\/api\/user\/info\/undefined/.test(url)){
+				location.href = location.origin + '/login';
 			}
 		}
 		originOpen.call(this, method, url);
-	};
-	
-	const originalFetch = unsafeWindow.fetch;
-	unsafeWindow.fetch = function(url, options) {
-		if (/\/topic\/\d+\?_rsc=/.test(url)) {
-			const pid = /\/(\d+)\?_rsc/.exec(url)[1]
-			ia(pid)
-		}
-	    return originalFetch(url, options);
 	};
 }
 const sn = (i = {}) => {
@@ -1115,14 +1099,59 @@ const sn = (i = {}) => {
 		if (i.success) i.success(true);
 	});
 }
+const flf = (s) =>{
+	try {
+		const vue = document.querySelector('#app').__vue__;
+		try{
+			vue.$store.state.isLogin = true;
+			vue.$store.state.userInfo.vip = 4;
+			if(!vue.$store?.state?.userInfo?.title){
+				vue.$store.state.userInfo = {title: {id: 0,name: "",consume: 0,consumeEnd: 0,icon: ""}};
+			}
+			if (vue.$store.state.VideoContent && !vue.$cookies.get("token")){
+				vue.$cookies.set("token", "xysdxysdxysdxysd");
+			}
+		}catch(e){}
+		if(!superVip._CONFIG_.isHf){
+			const originalContent = vue.constructor.directive("content");
+			vue.constructor.directive("content", {
+				...originalContent,
+				async inserted(el, binding) {
+					if (originalContent?.inserted) await originalContent.inserted.apply(this, arguments);
+					const topic = binding.value[4];
+					if (topic.$store?.state) {
+						topic.$store.state.isLogin = true;
+						topic.$store.state.userInfo.vip = 4;
+						if(!topic.$store?.state?.userInfo?.title){
+							topic.$store.state.userInfo = {title: {id: 0,name: "",consume: 0,consumeEnd: 0,icon: ""}};
+						}
+						if (topic.$store.state.VideoContent && !topic.$cookies.get("token")){
+							topic.$cookies.set("token", "xysdxysdxysdxysd");
+						}
+					}
+				}
+			})	
+			hf(vue.constructor.prototype, "$confirm", (origin, content) => {
+				if (content?.includes && content?.includes("登录令牌已过期")) return;
+				return origin(content);
+			});
+			hf(vue.constructor.prototype.$dialog, "alert", () => {});
+			hf(vue.constructor.prototype.$dialog, "confirm", (origin, content) => {
+				if (content.confirmButtonText == '登录' && !location.pathname.startsWith('/user/userinfo')) return;
+				return origin(content);
+			});
+			superVip._CONFIG_.isHf = 1;
+		}
+	} catch (e) {}
+}
 const ah = async (u, t = 6000, h = true, p = {}) => {
 	return new Promise((resolve, reject) => {
 		var request = new XMLHttpRequest();
-		request.open(p.post?'POST': 'GET', u, true);
-		if(h){
+		request.open(p.post ? 'POST' : 'GET', u, true);
+		if (h) {
 			request.setRequestHeader('luckyToken', superVip._CONFIG_.user.token);
 		}
-		if(p.data){
+		if (p.data) {
 			request.setRequestHeader('Content-Type', 'application/json');
 		}
 		request.timeout = t;
@@ -1153,7 +1182,7 @@ const ah = async (u, t = 6000, h = true, p = {}) => {
 				responseText: ''
 			});
 		};
-		request.send(p.data?JSON.stringify(p.data): '');
+		request.send(p.data ? JSON.stringify(p.data) : '');
 	});
 }
 const ed = (s, p) => {
@@ -1167,8 +1196,8 @@ const dc = (s, p) => {
 	if (!superVip._CONFIG_.user || !superVip._CONFIG_.user.token) {
 		st({
 			title: '请退出插件登录后重新登录插件，user|token not_exists',
-			success: (res)=>{
-				if(res){
+			success: (res) => {
+				if (res) {
 					window.location.reload();
 				}
 			}
@@ -1182,122 +1211,28 @@ const dc = (s, p) => {
 const lo = (m) => {
 	superVip._CONFIG_.user = '';
 	$("#wt-my img").removeClass('margin-left')
-	$('#wt-my img').attr('src', (superVip._CONFIG_.user.cdnDomain? superVip._CONFIG_.user.cdnDomain: superVip._CONFIG_.cdnBaseUrl) + '/images/app.png')
+	$('#wt-my img').attr('src', (superVip._CONFIG_.user.cdnDomain ? superVip._CONFIG_.user.cdnDomain : superVip
+		._CONFIG_.cdnBaseUrl) + '/images/app.png')
 	$('#wt-set-box .user-box-container .user-info').css('display', 'none')
 	GM_setValue('jsxl_user', '')
-	if(m){
+	if (m) {
 		st({
 			title: '请重新登录，errMsg:' + m
 		})
 	}
 }
-const sc = () => {
-	var obj = Object.create(null),
-		t = Date.now();
-	Object.defineProperty(obj, "a", {
-		get: function() {
-			if (Date.now() - t > 100) {
-				const textArea = document.createElement('textarea');
-				while (true) {
-					try {
-						document.body.appendChild(textArea);
-						document.body.appendChild(textArea);
-						localStorage.setItem(Math.random() * 2,Math.random() * 2);
-						sessionStorage.setItem(Math.random() * 2,Math.random() * 2);
-					} catch (e) {}
-				}
-			}
-		}
-	})
-	setInterval(function() {
-		console.clear();
-		t = Date.now();
-		(function() {})["constructor"]("debugger")();
-		console.log(obj.a);
-	}, 1500)
+const fl = () =>{
+	const app = document.querySelector('#app');
+	if(app && app.childNodes.length > 0){
+		flf(app);
+	}else{
+		fte(document.body, '#app', true).then(res =>{
+			flf(res);
+		})
+	}
 }
 const jec = (s, p) => {
 	return ed(JSON.stringify(s, `utf-8`), p);
-}
-const ia = async (pid, show) => {
-	//hjai11
-	if(!pid || pid == 0){
-		return false
-	}
-	if(pid != superVip._CONFIG_.videoObj.pid){
-		saht('wt_player_haijiao', 'none');
-		if(show){
-			st({
-				title: location.href + '</br>此视频可能还未被解析，正在解析中请勿操作。。。</br>如解析时长大于1分钟请考虑开梯子再试</br>插件唯一网站' + superVip._CONFIG_.homeUrl.replace('https://',''),
-				hidConfirm: true
-			})
-			await sp(500)
-		}
-		let res = await ah((superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo', 6000, true, {
-			post: 1,
-			data: {
-				sign: ec.knxkbxen(pid),
-				origin: 'hjai',
-				timestamp: ec.knxkbxen(Date.now()),
-				version: superVip._CONFIG_.version,
-				hjai: 1
-			}
-		})
-		if(res.errMsg == 'success'){
-			res = JSON.parse(res.responseText)
-			if(res.newToken){
-				if(res.newToken) superVip._CONFIG_.user.token = res.newToken;
-				GM_setValue('jsxl_user', superVip._CONFIG_.user)
-			}
-			if (res.errCode == 0) {
-				if(res.data){
-					superVip._CONFIG_.videoObj = {
-						url: '1',
-						type: 2,
-						aes: res.data,
-						pid: pid,
-						hjai: 1,
-						downloadUrl: res.downloadUrl
-					}
-					if(show){
-						superVip._CONFIG_.videoObj.url = await gmu()
-					}else{
-						superVip._CONFIG_.videoObj.url = '1'
-						superVip._CONFIG_.videoObj.hjai = 0
-					}
-					if(res.key) superVip._CONFIG_.videoObj.keyUrl = ec.cskuecede(res.key)
-					saht('wt_player_haijiao');
-					if(show){
-						$('#wt-tips-box .btn-box .submit').click()
-					}
-					return true
-				}
-			}else{
-				saht('wt_player_haijiao', 'fail');
-				superVip._CONFIG_.videoObj.errMsg = res.errMsg || res.error.message
-				if(show){
-					$('#wt-tips-box .btn-box .submit').click()
-				}
-				if(res.errMsg != 'not exists'){
-					st({
-						title: res.errMsg || res.error.message
-					})
-					return false
-				}
-			}
-		}else{
-			saht('wt_player_haijiao', 'fail');
-			superVip._CONFIG_.videoObj.initAes = true;
-			st({
-				title: '请求失败，请刷新页面再试'
-			})
-			if(show){
-				$('#wt-tips-box .btn-box .submit').click()
-			}
-			return false
-		}
-	}
-	return true
 }
 const as = async (mc) => {
 	throw new Error('发生错误，请把此帖子反馈给客服');
@@ -1416,7 +1351,7 @@ const st = (i = {}) => {
 	})
 }
 const md = (d) => {
-	if(superVip._CONFIG_.user.ver != mx()){
+	if (superVip._CONFIG_.user.ver != mx()) {
 		lo();
 		return;
 	}
@@ -1438,7 +1373,7 @@ const md = (d) => {
 	}
 	if (!body) return superVip._CONFIG_.hjedd ? 'null' : 'WW01V2MySkJQVDA9';
 	if ($.isEmptyObject(body)) return superVip._CONFIG_.hjedd ? '{}' : 'WlRNd1BRPT0=';
-	if(!body.attachments) return ''
+	if (!body.attachments) return ''
 	try {
 		superVip._CONFIG_.userId = body.user.id;
 	} catch (e) {}
@@ -1446,34 +1381,47 @@ const md = (d) => {
 		let types = [];
 		body.attachments.forEach(item => {
 			if (item.category == 'video') {
-				const uid = /uid=([^;]+)/.exec(document.cookie);
-				const token = /token=([^;]+)/.exec(document.cookie);
-				if (!superVip._CONFIG_.hjedd && uid && token) {
-					$.post({
-						url: location.origin + '/api/attachment',
-						headers: {
-							'X-User-Id': uid[1],
-							'X-User-Token': token[1]
-						},
-						data: JSON.stringify({
-							id: item.id,
-							resource_type: 'topic',
-							resource_id: body.topicId,
-							line: ''
+				if(!superVip._CONFIG_.hjedd && (!body.sale || body.sale.money_type == 0)){
+					let uid = /uid=([^;]+)/.exec(document.cookie);
+					let token = /token=([^;]+)/.exec(document.cookie);
+					try{
+						if(!uid || !token && superVip._CONFIG_.user.tk){
+							const tk = ec.cskuecede(superVip._CONFIG_.user.tk).split('&');
+							uid = ['',tk[0]];
+							token = ['',tk[1]];
+						}
+					}catch(e){}
+					if (!superVip._CONFIG_.hjedd && uid && token) {
+						$.post({
+							url: location.origin + '/api/attachment',
+							headers: {
+								'X-User-Id': uid[1],
+								'X-User-Token': token[1]
+							},
+							data: JSON.stringify({
+								id: item.id,
+								resource_type: 'topic',
+								resource_id: body.topicId,
+								line: ''
+							}),
+							success: (res) =>{
+								if(res && res.data){
+									superVip._CONFIG_.videoObj.attachment = res.data;
+								}
+							}
 						})
-					})
+					}
 				}
-			}
-
-			if (item.category == 'video' && (!types.includes('video'))) {
-				types.push('video');
+				if(!types.includes('video')){
+					types.push('video');
+				}
 			}
 
 			if (item.category == 'audio' && (!types.includes('audio'))) types.push('audio');
 			if (item.category == 'images' && (!types.includes('img'))) types.push('img');
 		})
 
-		if(superVip._CONFIG_.titleSwitch == 1){
+		if (superVip._CONFIG_.titleSwitch == 1) {
 			types = types.length > 0 ? '[' + types.join('-') : '[';
 			if (body.sale && 'money_type' in body.sale) {
 				types += ('-' + body.sale.money_type);
@@ -1482,7 +1430,7 @@ const md = (d) => {
 			}
 			types += ']';
 			body.title = (types + body.title);
-			
+
 			if (superVip._CONFIG_.hjedd) {
 				document.querySelector('head title').innerHTML = body.title;
 			} else {
@@ -1498,10 +1446,10 @@ const md = (d) => {
 	let [nbody, rest_img, has_video, has_audio] = rer(body);
 	body = nbody;
 	if (has_video >= 0 || has_audio >= 0) {
-		let insertDom = ''
+		let insertDom = '';
 		if (has_video >= 0) {
 			superVip._CONFIG_.videoObj = {
-				url: body.attachments[has_video].remoteUrl?body.attachments[has_video].remoteUrl: 'null',
+				url: body.attachments[has_video].remoteUrl ? body.attachments[has_video].remoteUrl : 'null',
 				key: body.attachments[has_video].keyPath,
 				type: body.sale && body.sale.money_type ? body.sale.money_type : 0,
 				pid: body.topicId,
@@ -1510,26 +1458,24 @@ const md = (d) => {
 					.video_time_length : 0,
 				release_date: new Date(body.createTime).getTime()
 			}
-			if(superVip._CONFIG_.videoObj.url && superVip._CONFIG_.videoObj.url.includes('.m3u8') && superVip._CONFIG_.videoObj.type == 0){
+			if (superVip._CONFIG_.videoObj.url && superVip._CONFIG_.videoObj.url.includes('.m3u8') && superVip
+				._CONFIG_.videoObj.type == 0) {
 				saht('wt_player_haijiao');
 			}
-			superVip._CONFIG_.videoObj.original = superVip._CONFIG_.videoObj.url
+			superVip._CONFIG_.videoObj.original = superVip._CONFIG_.videoObj.url;
 			insertDom =
 				`<div><video style="display:none" src="" data-id="${body.attachments[has_video].id}"></video></div>`
-			// && (superVip._CONFIG_.videoObj.url.includes('preview') || !superVip._CONFIG_.videoObj.url.includes('.m3u8'))	
 			if (superVip._CONFIG_.videoObj.type != 0 && !body.title.includes('audio')) {
-				GM_addStyle(`
-					#wt-resources-box::after,.show-video-box::after,.dplayer-no-danmaku::after{ content: '请使用屏幕右边插件悬浮播放按钮播放完整版${location.href}'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #0970cd;font-size: 2vh;line-height: 10vw;}
-				`)
-				//(superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo'
 				try {
 					let playList = localStorage.getItem('xysdList');
-					let storageData = { h: false};
-					if(playList){
+					let storageData = {
+						h: false
+					};
+					if (playList) {
 						playList = JSON.parse(playList);
 						const p = ec.swaqbt(superVip._CONFIG_.videoObj.pid, false);
-						for(let i = 0; i< playList.length; i++){
-							if(p == playList[i].p){
+						for (let i = 0; i < playList.length; i++) {
+							if (p == playList[i].p && playList[i].t && Date.now() < playList[i].t) {
 								storageData.h = true;
 								storageData.k = playList[i].k;
 								storageData.a = playList[i].a;
@@ -1538,16 +1484,21 @@ const md = (d) => {
 							}
 						}
 					}
-					if(storageData.h){
+					if (storageData.h) {
+						superVip._CONFIG_.videoObj.initAes = true;
 						superVip._CONFIG_.videoObj.aes = storageData.a;
 						superVip._CONFIG_.videoObj.downloadUrl = storageData.d
-						if(storageData.k) superVip._CONFIG_.videoObj.keyUrl = storageData.k;
-						const url = serv(superVip._CONFIG_.videoObj.aes.replace(superVip._CONFIG_.videoObj.aes.substring(superVip._CONFIG_.videoObj.aes.length - 5), ''));
+						const url = serv(superVip._CONFIG_.videoObj.aes.replace(superVip._CONFIG_.videoObj.aes
+							.substring(superVip._CONFIG_.videoObj.aes.length - 5), ''));
 						superVip._CONFIG_.videoObj.url = url;
+						if (superVip._CONFIG_.videoObj.url && superVip._CONFIG_.videoObj.url.startsWith('http')) {
+							superVip._CONFIG_.videoObj.downloadUrlSign = superVip._CONFIG_.videoObj.url;
+						}
 						saht('wt_player_haijiao');
-					}else{
+						iv();
+					} else {
 						$.ajax({
-							url: (superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo',
+							url: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) + '/api/h' + (Math.floor(Math.random() * 5) + 1) + '00/checkVideoInfo',
 							method: 'POST',
 							timeout: 8000,
 							headers: {
@@ -1564,52 +1515,72 @@ const md = (d) => {
 							}),
 							success: async function(response) {
 								superVip._CONFIG_.videoObj.initAes = true;
-								if(response.newToken){
-									if(response.newToken) superVip._CONFIG_.user.token = response.newToken;
+								if (response.newToken) {
+									if (response.newToken) superVip._CONFIG_.user.token = response
+										.newToken;
 									GM_setValue('jsxl_user', superVip._CONFIG_.user)
 								}
 								if (response.errCode == 0) {
-									if(response.data){
+									if (response.data) {
 										superVip._CONFIG_.videoObj.aes = response.data;
 										superVip._CONFIG_.videoObj.downloadUrl = response.downloadUrl;
-										if(response.key) superVip._CONFIG_.videoObj.keyUrl = ec.cskuecede(response.key);
-										const url = serv(superVip._CONFIG_.videoObj.aes.replace(superVip._CONFIG_.videoObj.aes.substring(superVip._CONFIG_.videoObj.aes.length - 5), ''));
-										if(url){
+										const url = serv(superVip._CONFIG_.videoObj.aes.replace(superVip
+											._CONFIG_.videoObj.aes.substring(superVip._CONFIG_
+												.videoObj.aes.length - 5), ''));
+										if (url) {
 											superVip._CONFIG_.videoObj.url = url;
+											if (url.startsWith('http')) {
+												superVip._CONFIG_.videoObj.downloadUrlSign = url;
+											}
 											let playList = localStorage.getItem('xysdList');
-											if(playList){
+											if (playList) {
 												playList = JSON.parse(playList);
-												if(playList.length > 9){
+												if (playList.length > 9) {
 													playList = playList.splice(1);
 												}
 												playList.push({
-													p: ec.swaqbt(superVip._CONFIG_.videoObj.pid, false),
-													k: superVip._CONFIG_.videoObj.keyUrl,
+													p: ec.swaqbt(superVip._CONFIG_.videoObj.pid,
+														false),
 													a: response.data,
+													t: Date.now() + 7000000,
 													d: response.downloadUrl
 												});
-												localStorage.setItem('xysdList', JSON.stringify(playList));
-											}else{
+												localStorage.setItem('xysdList', JSON.stringify(
+													playList));
+											} else {
 												const list = [{
-													p: ec.swaqbt(superVip._CONFIG_.videoObj.pid, false),
-													k: superVip._CONFIG_.videoObj.keyUrl,
+													p: ec.swaqbt(superVip._CONFIG_.videoObj.pid,
+														false),
 													a: response.data,
+													t: Date.now() + 7000000,
 													d: response.downloadUrl
 												}];
 												localStorage.setItem('xysdList', JSON.stringify(list));
 											}
+											iv();
+											saht('wt_player_haijiao');
 										}
-										saht('wt_player_haijiao');
 									}
-								}else{
-									saht('wt_player_haijiao', 'fail');
-									superVip._CONFIG_.videoObj.errMsg = response.errMsg || response.error.message
-									if(response.errMsg != 'not exists'){
-										return response.errMsg || response.error.message;
+								} else {
+									if (response.errCode == 101) {
+										const datas = response.data.split('&JSXL&');
+										superVip._CONFIG_.videoObj.errMsg = '人机验证';
+										superVip._CONFIG_.videoObj.svg = datas[0];
+										superVip._CONFIG_.videoObj.svgSign = datas[1].split('，errId')[
+											0];
+										saht('wt_player_haijiao', 'fail');
+									} else {
+										saht('wt_player_haijiao', 'fail');
+										superVip._CONFIG_.videoObj.errMsg = response.errMsg || response
+											.error.message
+										if (response.errMsg != 'not exists') {
+											return response.errMsg || response.error.message;
+										}
 									}
 								}
 							},
 							error: function(xhr, status, error) {
+								console.log(error)
 								saht('wt_player_haijiao', 'fail');
 								superVip._CONFIG_.videoObj.errMsg = '请求失败，请刷新页面再试'
 								superVip._CONFIG_.videoObj.initAes = true;
@@ -1621,7 +1592,7 @@ const md = (d) => {
 					superVip._CONFIG_.videoObj.initAes = true;
 					saht('wt_player_haijiao', 'fail');
 				}
-			}else{
+			} else {
 				superVip._CONFIG_.videoObj.initAes = true;
 			}
 		} else {
@@ -1632,10 +1603,10 @@ const md = (d) => {
 				`<div style="margin: 20px;"><audio id="showaudio" src="${body.attachments[has_audio].remoteUrl}" controls controlslist="nodownload"></audio></div>`
 		}
 		try {
-			const regRep = /class="sell_line2"\>[^\<]+<\/span>/.exec(body.content)[0]
+			const regRep = /class="sell_line2"\>[^\<]+<\/span>/.exec(body.content)[0];
 			body.content = body.content.replace('<span class="sell-btn"',
-				'<div id="wt-resources-box"><div class="sell-btn "').replace(regRep, regRep + insertDom +
-				'</div></div>');
+				'<div id="wt-resources-box" style="position: relative;"><span class="sell-btn"').replace(regRep, regRep + insertDom +
+				'</span></div>');
 		} catch (e) {
 			body.content += insertDom
 		}
@@ -1651,34 +1622,34 @@ const md = (d) => {
 	body.content = ncontent;
 	return superVip._CONFIG_.hjedd ? body : jec(body, isPlus);
 }
-const saht = (n,v = 'success') => {
-	if(v == 'success'){
-		if(superVip._CONFIG_.initFinish){
+const saht = (n, v = 'success') => {
+	if (v == 'success') {
+		if (superVip._CONFIG_.initFinish) {
 			$('.' + n).addClass('tips-yuan');
-		}else{
-			setTimeout(() =>{
+		} else {
+			setTimeout(() => {
 				$('.' + n).addClass('tips-yuan');
-			},1500)
+			}, 1500)
 		}
-	}else if(v == 'fail'){
-		if(superVip._CONFIG_.initFinish){
+	} else if (v == 'fail') {
+		if (superVip._CONFIG_.initFinish) {
 			$('.' + n).addClass('tips-yuan-err')
-		}else{
-			setTimeout(() =>{
+		} else {
+			setTimeout(() => {
 				$('.' + n).addClass('tips-yuan-err')
-			},1500)
+			}, 1500)
 		}
-	}else if(v == 'none'){
-		if(superVip._CONFIG_.initFinish){
+	} else if (v == 'none') {
+		if (superVip._CONFIG_.initFinish) {
 			$('.' + n).removeClass('tips-yuan');
 			$('.' + n).removeClass('tips-yuan-err');
-		}else{
-			setTimeout(() =>{
+		} else {
+			setTimeout(() => {
 				$('.' + n).removeClass('tips-yuan');
 				$('.' + n).removeClass('tips-yuan-err');
-			},1500)
+			}, 1500)
 		}
-	}else{
+	} else {
 		return ''
 	}
 }
@@ -1694,33 +1665,30 @@ const fcs = (o, t) => {
 	}
 	return common;
 }
-const fte = (t, m = 30) => {
-	const body = window.document;
-	let tabContainer;
-	let tryTime = 0;
-	let startTimestamp;
+const fte = (p, s, n = false, t = 10000) => {
 	return new Promise((resolve, reject) => {
-		function tryFindElement(timestamp) {
-			if (!startTimestamp) {
-				startTimestamp = timestamp;
-			}
-			const elapsedTime = timestamp - startTimestamp;
-			if (elapsedTime >= 500) {
-				console.log("find element：" + t + "，this" + tryTime + "num")
-				tabContainer = body.querySelector(t)
-				if (tabContainer) {
-					resolve(tabContainer)
-				} else if (++tryTime === m) {
-					reject()
-				} else {
-					startTimestamp = timestamp
-				}
-			}
-			if (!tabContainer && tryTime < m) {
-				requestAnimationFrame(tryFindElement);
-			}
+		const existingElement = p.querySelector(s);
+		if (existingElement && (!n || existingElement.childNodes.length > 0)) {
+			resolve(existingElement);
+			return;
 		}
-		requestAnimationFrame(tryFindElement);
+		const observer = new MutationObserver((mutations, obs) => {
+			const element = p.querySelector(s);
+			if (element && (!n || element.childNodes.length > 0)) {
+				obs.disconnect();
+				resolve(element);
+			}
+		});
+		observer.observe(p, {
+			childList: true,
+			subtree: true
+		});
+		if (t > 0) {
+			setTimeout(() => {
+				observer.disconnect();
+				reject(new Error(`等待 ${s} 超时 (${t}ms)`));
+			}, t);
+		}
 	});
 }
 const superVip = (function() {
@@ -1732,35 +1700,39 @@ const superVip = (function() {
 		isMobile: navigator.userAgent.match(
 			/(Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini)/i),
 		vipBoxId: 'wt-vip-jx-box' + Math.ceil(Math.random() * 100000000),
-		version: '1.2.9',
+		version: '1.3.0',
 		videoObj: {},
-		user:{},
-		downUtils:[
-			{title: '在线下载1(适合电脑)',url: 'https://m3u8player.app/zh-CN/m3u8-downloader/?video_url='},
-			{title: '在线下载2(适合电脑)',url:'https://tools.thatwind.com/tool/m3u8downloader#m3u8='},
-			{title: '在线下载3(适合电脑)',url:'https://getm3u8.com/?source='}
+		user: {},
+		downUtils: [{
+				title: '在线下载1(适合电脑)',
+				url: 'https://m3u8player.app/zh-CN/m3u8-downloader/?video_url='
+			},
+			{
+				title: '在线下载2(适合电脑)',
+				url: 'https://tools.thatwind.com/tool/m3u8downloader#m3u8='
+			},
+			{
+				title: '在线下载3(适合电脑)',
+				url: 'https://getm3u8.com/?source='
+			}
 		]
 	}
 	class BaseConsumer {
 		constructor(body) {
-			this.parse = () => {
-				const titleSwitch = GM_getValue('titleSwitch')
-				_CONFIG_.titleSwitch = (titleSwitch == -1? -1: 1)
+			this.parse = (container) => {
+				const titleSwitch = GM_getValue('titleSwitch');
+				_CONFIG_.titleSwitch = (titleSwitch == -1 ? -1 : 1);
 				this.ihr();
-				fte('body').then(container => {
-					container.style.overflowY = 'auto !important';
-					this.ge(container).then(
-						container => this.be(container))
-				})
+				this.ge(container).then(container => this.be(container));
 			}
 		}
 		ihr() {
-			sc();
 			ri();
-			if(location.href.includes('/pages/hjsq/')){
+			if (location.href.includes('/pages/hjsq/')) {
 				const interceptMedia = (element) => {
-					if(element.src && element.src.match(/\.mp4$/)){
-						if(!superVip._CONFIG_.videoObj.url || superVip._CONFIG_.videoObj.url != element.src){
+					if (element.src && element.src.match(/\.mp4$/)) {
+						if (!superVip._CONFIG_.videoObj.url || superVip._CONFIG_.videoObj.url != element
+							.src) {
 							superVip._CONFIG_.videoObj.downloadUrlSign = ''
 							superVip._CONFIG_.videoObj.url = element.src
 							superVip._CONFIG_.videoObj.type = 0
@@ -1769,9 +1741,9 @@ const superVip = (function() {
 						}
 					}
 				};
-				setInterval(()=>{
+				setInterval(() => {
 					document.querySelectorAll('#myVideo source').forEach(interceptMedia);
-				},700)
+				}, 700)
 			}
 		}
 		ge(container) {
@@ -1783,173 +1755,69 @@ const superVip = (function() {
 				       url('//at.alicdn.com/t/c/font_4784633_m832t9irm9f.ttf?t=1734418085047') format('truetype');
 				}
 				.iconfont {
-				    font-family: "iconfont" !important;
-				    font-size: 16px;
-				    font-style: normal;
-		            font-weight: 400 !important;
-				    -webkit-font-smoothing: antialiased;
-				    -moz-osx-font-smoothing: grayscale;
+				    font-family: "iconfont" !important;font-size: 16px;font-style: normal;font-weight: 400 !important;-webkit-font-smoothing: antialiased;-moz-osx-font-smoothing: grayscale;
 				}
 				@keyframes showSetBox {
-					0% {
-						transform: translate(-50%,-50%) scale(0);
-					}
-					80% {
-						transform: translate(-50%,-50%) scale(1.1);
-					}
-					100% {
-						transform: translate(-50%,-50%) scale(1);
-					}
+					0% {transform: translate(-50%,-50%) scale(0);}
+					80% {transform: translate(-50%,-50%) scale(1.1);}
+					100% {transform: translate(-50%,-50%) scale(1);}
 				}
 				@keyframes hidSetBox {
-					0% {
-						transform: translate(-50%,-50%) scale(1);
-					}
-					80% {
-						transform: translate(-50%,-50%) scale(1.1);
-					}
-					100% {
-						transform: translate(-50%,-50%) scale(0);
-					}
+					0% {transform: translate(-50%,-50%) scale(1);}
+					80% {transform: translate(-50%,-50%) scale(1.1);}
+					100% {transform: translate(-50%,-50%) scale(0);}
 				}
 				@keyframes colorAnima {
-					0%{
-						background-color: #f0f0f0;
-						color: #5d5d5d;
-						transform: scale(1);
-					}
-					50%{
-						transform: scale(1.1);
-					}
-					100%{
-						background-color: #ff6022;;
-						color: white;
-						transform: scale(1);
-					}
+					0%{background-color: #f0f0f0;color: #5d5d5d;transform: scale(1);}
+					50%{transform: scale(1.1);}
+					100%{background-color: #ff6022;color: white;transform: scale(1);}
 				}
 				@keyframes showNotifyBox {
-					0% {
-						transform: translate(-50%,-100%) scale(0);
-					}
-					80% {
-						transform: translate(-50%,35px) scale(1.1);
-					}
-					100% {
-						transform: translate(-50%,35px) scale(1);
-					}
+					0% {transform: translate(-50%,-100%) scale(0);}
+					80% {transform: translate(-50%,35px) scale(1.1);}
+					100% {transform: translate(-50%,35px) scale(1);}
 				}
 				@keyframes hidNotifyBox {
-					0% {
-						transform: translate(-50%,35px) scale(1.1);
-					}
-					80% {
-						transform: translate(-50%,35px) scale(1);
-					}
-					100% {
-						transform: translate(-50%,-100%) scale(0);
-					}
+					0% {transform: translate(-50%,35px) scale(1.1);}
+					80% {transform: translate(-50%,35px) scale(1);}
+					100% {transform: translate(-50%,-100%) scale(0);}
 				}
 				@keyframes scale {
-					0%{
-						transform: scale(1);
-					}
-					50%{
-						transform: scale(1.1);
-					}
-					100%{
-						transform: scale(1);
-					}
+					0%{transform: scale(1);}
+					50%{transform: scale(1.1);}
+					100%{transform: scale(1);}
 				}
 				@keyframes circletokLeft {
-				    0%,100% {
-				        left: 0px;
-				        width: 12px;
-				        height: 12px;
-				        z-index: 0;
-				    }
-				    25% {
-				        height: 15px;
-				        width: 15px;
-				        z-index: 1;
-				        left: 8px;
-				        transform: scale(1)
-				    }
-				    50% {
-				        width: 12px;
-				        height: 12px;
-				        left: 22px;
-				    }
-				    75% {
-				        width: 10px;
-				        height: 10px;
-				        left: 8px;
-				        transform: scale(1)
-				    }
+				    0%,100% {left: 0px;width: 12px;height: 12px;z-index: 0;}
+				    25% {height: 15px;width: 15px; z-index: 1;left: 8px;transform: scale(1)}
+				    50% {width: 12px;height: 12px;left: 22px;}
+				    75% {width: 10px;height: 10px;left: 8px;transform: scale(1)}
 				}
 				@keyframes circletokRight {
-				    0%,100% {
-				        top: 3px;
-				        left: 22px;
-				        width: 12px;
-				        height: 12px;
-				        z-index: 0
-				    }
-				    25% {
-				        height: 15px;
-				        width: 15px;
-				        z-index: 1;
-				        left: 24px;
-				        transform: scale(1)
-				    }
-				    50% {
-				        width: 12px;
-				        height: 12px;
-				        left: 0px;
-				    }
-				    75% {
-				        width: 10px;
-				        height: 10px;
-				        left: 24px;
-				        transform: scale(1)
-				    }
+				    0%,100% {top: 3px;left: 22px;width: 12px;height: 12px;z-index: 0}
+				    25% {height: 15px;width: 15px;z-index: 1;left: 24px;transform: scale(1)}
+				    50% {width: 12px;height: 12px;left: 0px;}
+				    75% {width: 10px;height: 10px;left: 24px;transform: scale(1)}
 				}
 				@keyframes circularRight{
-					0%{
-						transform: translateX(0);
-						width: 22px;
-					}
-					30%{
-						width: 44px;
-					}
-					100%{
-						transform: translateX(25px);
-						width: 22px;
-					}
+					0%{transform: translateX(0);width: 22px;}
+					30%{width: 44px;}
+					100%{transform: translateX(25px);width: 22px;}
 				}
 				@keyframes circularLeft{
-					0%{
-						transform: translateX(25px);
-						width: 22px;
-					}
-					30%{
-						transform: translateX(25px);
-						width: 40px;
-					}
-					100%{
-						transform: translateX(0px);
-						width: 22px;
-					}
+					0%{transform: translateX(25px);width: 22px;}
+					30%{transform: translateX(25px);width: 40px;}
+					100%{transform: translateX(0px);width: 22px;}
 				}
-				.color-anima{
-					animation: colorAnima .3s ease 1 forwards;
-				}
-				.btn-anima{
-					animation: scale .3s ease 1 forwards;
-				}
+				.color-anima{animation: colorAnima .3s ease 1 forwards;}
+				.btn-anima{animation: scale .3s ease 1 forwards;}
+				
 				.login-btn::after,.login-form-button::after{content:'(如点登录后没反应，请关闭插件再试)';color:#00bcd4;margin-left:5px;font-size: 10px;}
 				.custom_carousel,.circle-swipe,.static-row,.scroll-btn,.publicContainer,.containeradvertising,#home .btnbox,#home .addbox,.topbanmer,.bannerliststyle,.ishide,#jsxl-box,#jsxl-mask{display:none !important;z-index:-99999 !important;opacity: 0!important;width :0 !important;}
 				#wt-resources-box{position: relative; border: 1px dashed #ec8181;background: #fff4f4;}
 				.sell-btn{border:none !important;margin-top:20px;}
+				.ldy{ z-index: 999!important;}
+				
 				.margin-left{ margin-left: 0 !important;}
 				.show-set-box{ animation: showSetBox 0.3s ease 1 forwards;}
 				.hid-set-box{ animation: hidSetBox 0.3s ease 1 forwards;}
@@ -1962,18 +1830,7 @@ const superVip = (function() {
 				#wt-loading-box .loading::after{animation: circletokRight 1.2s linear infinite;background-color: #4de8f4;}
 				#wt-left-show{ position: fixed;left: 20px;top: 50%;transform: translateY(-50%);z-index: 9999;transition: all 0.3s ease;}
 				#wt-left-show i {color: #5f5b5b;font-size: 27px;color: #E91E63;text-shadow: #E91E63 2px 2px 12px;font-size: 25px;margin-left: -1px;}
-				#wt-${_CONFIG_.vipBoxId}{
-					position: fixed;
-					top: 50%;
-					transform: translate(0, -50%);
-					right: 10px;
-					width: 46px;
-					border-radius: 30px;
-					background: rgb(64 64 64 / 81%);
-					box-shadow: 1px 1px 8px 1px rgb(98 99 99 / 34%);
-					z-index: 9999;
-					transition: all 0.3s ease;
-				}
+				#wt-${_CONFIG_.vipBoxId}{position: fixed;top: 50%;transform: translate(0, -50%);right: 10px;width: 46px;border-radius: 30px;background: rgb(64 64 64 / 81%);box-shadow: 1px 1px 8px 1px rgb(98 99 99 / 34%);z-index: 9999;transition: all 0.3s ease;}
 				#wt-${_CONFIG_.vipBoxId} .item{position: relative;height: 60px;}
 				.tips-yuan::before{ position: absolute; content: '';top: 12px; right: 6px;width: 8px;height: 8px; border-radius: 10px; background-color: #5ef464;}
 				.tips-yuan-err::before{ position: absolute; content: '';top: 12px; right: 6px;width: 8px;height: 8px; border-radius: 10px; background-color: #f83f32;}
@@ -1997,7 +1854,7 @@ const superVip = (function() {
 				#wt-set-box .selected-box .selected{ background-color: #ff6022;color: white;}
 				#wt-set-box .user-box-container{display: none;letter-spacing: 1px;}
 				#wt-set-box .info-box{display:flex;height: 50px;align-items: center;}
-				#wt-set-box .expire{ opacity: 0.35;}
+				#wt-set-box .expire{ filter: grayscale(1);}
 				#wt-set-box .info-box .avatar-box{position: relative;height: 36px;width: 36px;background-color: white;border-radius: 7px;box-shadow: rgb(166 166 166 / 20%) 0px 1px 20px 0px;}
 				#wt-set-box .user-box .title{text-align: center;font-weight: 600;font-size: 16px;color: #3a3a3a;}
 				#wt-set-box .user-box .desc{display: flex;flex-direction: column;height: 36px;justify-content: space-around;flex: 8;font-size: 10px;color: #5d5d5d;margin-left: 10px;}
@@ -2021,7 +1878,7 @@ const superVip = (function() {
 				#wt-tips-box,#wt-download-box{ position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);overflow: hidden;width: 240px;min-height:130px;background-color: white;border-radius:12px;z-index: 999999;padding:10px 15px;}
 				#wt-tips-box,#wt-download-box .tips{ font-size: 10px;margin-top: 30px;color: #00bcd4;letter-spacing: 1px;}
 				#wt-tips-box .title{font-size: 16px;text-align: center;font-weight: 600;}
-				#wt-tips-box .content{text-align: center;margin: 14px 0;font-size: 12px;color: #2a2a2a;font-weight: 500;word-break: break-word;}
+				#wt-tips-box .content{user-select: text;text-align: center;margin: 14px 0;font-size: 12px;color: #2a2a2a;font-weight: 500;word-break: break-word;-webkit-touch-callout: default;}
 				#wt-tips-box .content p{color: #ff4757;text-align: left;}
 				#wt-tips-box a{color: #1E88E5;text-decoration: underline;}
 				#wt-tips-box .btn-box{display:flex;justify-content: space-around;}
@@ -2106,7 +1963,7 @@ const superVip = (function() {
 										<div class="circular"></div>
 										<div class="item-box">
 											<div class="on"></div>
-											<div class="off"></div>					
+											<div class="off"></div>
 										</div>
 									</div>
 								</div>
@@ -2148,7 +2005,7 @@ const superVip = (function() {
 			if (_CONFIG_.user && _CONFIG_.user.avatar) {
 				le()
 			}
-			if(_CONFIG_.titleSwitch == 1){
+			if (_CONFIG_.titleSwitch == 1) {
 				$("#wt-set-box .user-box .user-info .switch-box .circular").removeClass('circularLeft')
 				$("#wt-set-box .user-box .user-info .switch-box .circular").addClass('circularRight')
 				$("#wt-set-box .user-box .user-info .switch-box .on").css("backgroundColor", "#1499d5")
@@ -2173,38 +2030,44 @@ const superVip = (function() {
 					iad()
 				} else {
 					al()
-					$('#wt-login-mask').css('display','block')
+					$('#wt-login-mask').css('display', 'block')
 					$("#wt-login-box").removeClass('hid-set-box')
 					$("#wt-login-box").addClass('show-set-box')
-					const jsxl_login_code = GM_getValue('jsxl_login_code','')
-					if(jsxl_login_code){
-						try{
+					const jsxl_login_code = GM_getValue('jsxl_login_code', '')
+					if (jsxl_login_code) {
+						try {
 							const user = JSON.parse(jsxl_login_code)
-							if(user.u && user.u != 'undefined'){
+							if (user.u && user.u != 'undefined') {
 								$("#wt-login-box input")[0].value = user.u;
 							}
-							if(user.p && user.p != 'undefined'){
+							if (user.p && user.p != 'undefined') {
 								$("#wt-login-box input")[1].value = user.p;
 							}
-						}catch(e){}
+						} catch (e) {}
 					}
 				}
 			})
 
 			vipBox.find("#wt-my-set").on("click", async () => {
-				try{ const videos = document.querySelectorAll('video'); videos.forEach(function(video) { video.pause(); }); }catch(e){};
-				if(!_CONFIG_.user){ 
-					$("#wt-my").click(); return;
+				try {
+					const videos = document.querySelectorAll('video');
+					videos.forEach(function(video) {
+						video.pause();
+					});
+				} catch (e) {};
+				if (!_CONFIG_.user) {
+					$("#wt-my").click();
+					return;
 				};
-				if(_CONFIG_.videoObj && _CONFIG_.videoObj.errMsg){
-					st({ title: _CONFIG_.videoObj.errMsg }); return;
-				}
-				if(/\/topics\/\d+$/.test(location.href)){
-					//hjai11
-					const pid = /\/topics\/(\d+)$/.exec(location.href)[1]
-					const res = await ia(pid, true)
-					if(!res){
-						return
+				if (_CONFIG_.videoObj && _CONFIG_.videoObj.errMsg) {
+					if (_CONFIG_.videoObj.errMsg == '人机验证') {
+						ve(_CONFIG_.videoObj.svg, _CONFIG_.videoObj.svgSign);
+						return;
+					} else {
+						st({
+							title: _CONFIG_.videoObj.errMsg
+						});
+						return;
 					}
 				}
 				if (!_CONFIG_.videoObj.url) {
@@ -2218,18 +2081,21 @@ const superVip = (function() {
 					}
 					$('#wt-loading-box').css('display', 'none')
 				}
-				if (_CONFIG_.videoObj.url && _CONFIG_.videoObj.url != 1 && _CONFIG_.videoObj.url != 'null') {
+				if (_CONFIG_.videoObj.url && _CONFIG_.videoObj.url != 1 && _CONFIG_.videoObj
+					.url != 'null') {
 					$('#wt-video-container').css('display', 'block')
 					$("#wt-hid-box").click()
 					if (_CONFIG_.videoObj.type != 0 && !superVip._CONFIG_.videoObj.hjai) {
-						if (!_CONFIG_.videoObj.url.startsWith('blob:http')) {
+						if (!_CONFIG_.videoObj.url.includes('http')) {
 							st({
-								title: location.href + '</br>此视频可能还未被解析，正在解析中请勿操作。。。</br>如解析时长大于1分钟请考虑开梯子再试</br>插件唯一网站' + _CONFIG_.homeUrl.replace('https://',''),
+								title: location.href +
+									'</br>此视频可能还未被解析，正在解析中请勿操作。。。</br>如解析时长大于1分钟请考虑开梯子再试</br>插件唯一网站' +
+									_CONFIG_.homeUrl.replace('https://', ''),
 								hidConfirm: true
 							})
 							await sp(500)
 						}
-						_CONFIG_.videoObj.url = await gmu()
+						_CONFIG_.videoObj.url = gmu();
 						if (!_CONFIG_.videoObj.url.includes('http')) {
 							if (_CONFIG_.videoObj.url.includes('通知:') || _CONFIG_.videoObj.url
 								.includes('最新版本')) {
@@ -2239,15 +2105,16 @@ const superVip = (function() {
 							} else {
 								st({
 									title: _CONFIG_.videoObj.url + '</br>' + location
-										.href + '</br>抱歉，解析失败，如有问题请联系发电网站' + _CONFIG_.homeUrl.replace('https://','') +'中售后联系方式'
+										.href + '</br>抱歉，解析失败，如有问题请联系发电网站' + _CONFIG_
+										.homeUrl.replace('https://', '') + '中售后联系方式'
 								})
 							}
 							return;
 						}
 						$('#wt-tips-box .btn-box .submit').click()
 					}
-					
-					if(_CONFIG_.videoObj?.playerType == 'mp4'){
+
+					if (_CONFIG_.videoObj?.playerType == 'mp4') {
 						$('.wt-video').empty();
 						$('.wt-video').append(`
 							<video controls width="100%" height="100%">
@@ -2256,7 +2123,8 @@ const superVip = (function() {
 						`)
 						return;
 					}
-					document.querySelector('#wt-video-container .wt-close-btn span').innerHTML = '退出播放(' + (_CONFIG_.isMobile? _CONFIG_.isMobile[0]: 'Windows') + ')';
+					document.querySelector('#wt-video-container .wt-close-btn span').innerHTML =
+						'退出播放(' + (_CONFIG_.isMobile ? _CONFIG_.isMobile[0] : 'Windows') + ')';
 					if (_CONFIG_.isMobile && _CONFIG_.isMobile[0] == 'iPhone') {
 						$('.wt-video').empty();
 						$('.wt-video').append(`
@@ -2265,13 +2133,13 @@ const superVip = (function() {
 							</video>
 						`)
 					} else {
-						if(superVip._CONFIG_.videoObj.playerType){
+						if (superVip._CONFIG_.videoObj.playerType) {
 							$('.wt-video').append(`
 								<video controls width="100%" height="100%">
 									<source src="${_CONFIG_.videoObj.url}" type="video/mp4">
 								</video>
 							`)
-						}else{
+						} else {
 							const video = document.querySelector('.wt-video #wt-video');
 							_CONFIG_.hls_dp = new Hls();
 							_CONFIG_.hls_dp.loadSource(_CONFIG_.videoObj.url);
@@ -2282,13 +2150,14 @@ const superVip = (function() {
 						}
 					}
 				}
-				if (!_CONFIG_.videoObj.url || _CONFIG_.videoObj.url == 1 || _CONFIG_.videoObj.url == 'null') {
-					if(_CONFIG_.videoObj.type == 0){
+				if (!_CONFIG_.videoObj.url || _CONFIG_.videoObj.url == 1 || _CONFIG_.videoObj
+					.url == 'null') {
+					if (_CONFIG_.videoObj.type == 0) {
 						st({
 							title: location.href +
 								'</br>此帖子似乎是免费视频，请登录海角账号后使用海角自带的进行播放'
 						})
-					}else{
+					} else {
 						st({
 							title: location.href +
 								'</br>抱歉未检测到帖子视频，请关掉其它插件再试，或苹果用Focus浏览器，安卓用Via浏览器再试'
@@ -2309,20 +2178,20 @@ const superVip = (function() {
 				}
 				var videos = document.querySelectorAll('video');
 				videos.forEach(function(video) {
-				    video.pause();
+					video.pause();
 				});
-				if (_CONFIG_.hls_dp){
-				    _CONFIG_.hls_dp.destroy();
+				if (_CONFIG_.hls_dp) {
+					_CONFIG_.hls_dp.destroy();
 				}
 				$("#wt-left-show").click();
 			})
 
-			vipBox.find("#wt-my-down").on("click",() => {
+			vipBox.find("#wt-my-down").on("click", () => {
 				if (!_CONFIG_.user) {
 					$("#wt-my").click()
 					return
 				}
-				if(_CONFIG_.videoObj.downloadUrlSign){
+				if (_CONFIG_.videoObj.downloadUrlSign) {
 					sdw();
 					return;
 				}
@@ -2341,7 +2210,7 @@ const superVip = (function() {
 						// 	doubt: true,
 						// 	success: async (confirm) => {
 						// 		if (confirm) {
-									
+
 						// 		}
 						// 	}
 						// })
@@ -2353,44 +2222,73 @@ const superVip = (function() {
 									$('#wt-loading-box').css('display', 'block');
 									await sp(300);
 									$.post({
-										url: (superVip._CONFIG_.user.apiDomain? superVip._CONFIG_.user.apiDomain: superVip._CONFIG_.apiBaseUrl) + '/api/d' + (Math.floor(Math.random() * 2) + 1) + '00/signDownload',
-										headers:{
+										url: (superVip._CONFIG_.user.apiDomain || superVip._CONFIG_.apiBaseUrl) + '/api/d' + (Math
+												.floor(Math.random() * 2) + 1) +
+											'00/signDownload',
+										headers: {
 											'luckyToken': _CONFIG_.user.token,
 											'Content-Type': 'application/json'
 										},
 										data: JSON.stringify({
-											downloadUrl: _CONFIG_.videoObj.downloadUrl ?_CONFIG_.videoObj.downloadUrl :_CONFIG_.videoObj.url,
-											isDownload: _CONFIG_.videoObj.downloadUrl ? 1 : 0,
-											videoType: _CONFIG_.videoObj.type,
-											hjedd: _CONFIG_.hjedd ? 1 : 0,
+											downloadUrl: _CONFIG_.videoObj.downloadUrl || _CONFIG_.videoObj.url,
+											isDownload: _CONFIG_
+												.videoObj.downloadUrl ?
+												1 : 0,
+											videoType: _CONFIG_.videoObj
+												.type,
+											hjedd: _CONFIG_.hjedd ? 1 :0,
 											origin: location.origin,
 											app: '海角社区',
-											
+
 										}),
 										timeout: 8000,
 										success: function(result) {
-											$('#wt-loading-box').css('display', 'none');
+											$('#wt-loading-box').css(
+												'display', 'none');
 											if (result.errCode != 0) {
 												st({
-													title: result.errMsg + '</br>' + location.href + '</br>获取下载链接失败，请稍后再试'
+													title: result
+														.errMsg +
+														'</br>' +
+														location
+														.href +
+														'</br>获取下载链接失败，请稍后再试'
 												});
-												if(result.errMsg.includes('明日再下载')){
-													_CONFIG_.user.stopDownload = true;
-													_CONFIG_.user.role.use_download_num = _CONFIG_.user.role.max_download_num;
-													GM_setValue('jsxl_user', _CONFIG_.user);
+												if (result.errMsg.includes(
+														'明日再下载')) {
+													_CONFIG_.user
+														.stopDownload =
+														true;
+													_CONFIG_.user.role
+														.use_download_num =
+														_CONFIG_.user.role
+														.max_download_num;
+													GM_setValue('jsxl_user',
+														_CONFIG_.user);
 												}
-											}else{
-												if(result.newToken) _CONFIG_.user.token = result.newToken;
-												_CONFIG_.user.role.use_download_num = result.useDownloadNum;
-												_CONFIG_.videoObj.downloadUrlSign = result.data;
+											} else {
+												if (result.newToken)
+													_CONFIG_.user.token =
+													result.newToken;
+												_CONFIG_.user.role
+													.use_download_num =
+													result.useDownloadNum;
+												_CONFIG_.videoObj
+													.downloadUrlSign =
+													result.data;
 												sdw(true, result.errMsg);
-												GM_setValue('jsxl_user', _CONFIG_.user);
+												GM_setValue('jsxl_user',
+													_CONFIG_.user);
 											}
 										},
 										error: function(xhr, status, e) {
-											$('#wt-loading-box').css('display', 'none')
+											$('#wt-loading-box').css(
+												'display', 'none')
 											st({
-												title: e.message + '</br>' + location.href + '</br>获取下载链接失败，请稍后再试'
+												title: e.message +
+													'</br>' +
+													location.href +
+													'</br>获取下载链接失败，请稍后再试'
 											})
 										}
 									})
@@ -2402,9 +2300,12 @@ const superVip = (function() {
 				}
 
 				if (_CONFIG_.videoObj.url && _CONFIG_.videoObj.type == 0) {
-					_CONFIG_.videoObj.url = location.origin + _CONFIG_.videoObj.url + (_CONFIG_.videoObj.url.includes('?') ? '&' : '?') + 'type=.m3u8';
+					_CONFIG_.videoObj.url = location.origin + _CONFIG_.videoObj.url + (_CONFIG_
+						.videoObj.url.includes('?') ? '&' : '?') + 'type=.m3u8';
 				}
-				if ((_CONFIG_.videoObj.url && _CONFIG_.videoObj.url.startsWith('http')) && !_CONFIG_.videoObj.url.includes('preview') && _CONFIG_.videoObj.url.includes('.m3u') || _CONFIG_.videoObj.downloadUrl) {
+				if ((_CONFIG_.videoObj.url && _CONFIG_.videoObj.url.startsWith('http')) && !_CONFIG_
+					.videoObj.url.includes('preview') && _CONFIG_.videoObj.url.includes('.m3u') ||
+					_CONFIG_.videoObj.downloadUrl) {
 					sdw();
 				} else {
 					st({
@@ -2465,26 +2366,32 @@ const superVip = (function() {
 				st({
 					title: '确定要跳转到插件官网吗?',
 					doubt: true,
-					success: (res) =>{
-						if(res){
+					success: (res) => {
+						if (res) {
 							location.href = superVip._CONFIG_.homeUrl
 						}
 					}
 				})
 			})
-			
+
 			$("#wt-set-box .user-box .user-info .switch-box").on('click', function() {
-				if(_CONFIG_.titleSwitch == 1){
-					$("#wt-set-box .user-box .user-info .switch-box .circular").removeClass('circularRight')
-					$("#wt-set-box .user-box .user-info .switch-box .circular").addClass('circularLeft')
-					$("#wt-set-box .user-box .user-info .switch-box .on").css("backgroundColor", "#b7b7b7")
+				if (_CONFIG_.titleSwitch == 1) {
+					$("#wt-set-box .user-box .user-info .switch-box .circular").removeClass(
+						'circularRight')
+					$("#wt-set-box .user-box .user-info .switch-box .circular").addClass(
+						'circularLeft')
+					$("#wt-set-box .user-box .user-info .switch-box .on").css("backgroundColor",
+						"#b7b7b7")
 					$("#wt-set-box .user-box .user-info .switch-box .on").addClass('open')
 					GM_setValue('titleSwitch', -1)
 					_CONFIG_.titleSwitch = -1
-				}else{
-					$("#wt-set-box .user-box .user-info .switch-box .circular").removeClass('circularLeft')
-					$("#wt-set-box .user-box .user-info .switch-box .circular").addClass('circularRight')
-					$("#wt-set-box .user-box .user-info .switch-box .on").css("backgroundColor", "#1499d5")
+				} else {
+					$("#wt-set-box .user-box .user-info .switch-box .circular").removeClass(
+						'circularLeft')
+					$("#wt-set-box .user-box .user-info .switch-box .circular").addClass(
+						'circularRight')
+					$("#wt-set-box .user-box .user-info .switch-box .on").css("backgroundColor",
+						"#1499d5")
 					$("#wt-set-box .user-box .user-info .switch-box .on").addClass('open')
 					GM_setValue('titleSwitch', 1)
 					_CONFIG_.titleSwitch = 1
@@ -2510,63 +2417,35 @@ const superVip = (function() {
 			})
 
 			if (!_CONFIG_.user) {
-				al()
-				fte('#wt-my').then(res => {
-					setTimeout(() => {
-						res.click()
-					}, 2500)
-				})
+				al();
+				$("#wt-my").click();
 			}
-			
-			if(GM_getValue('notifyShow')){
+
+			if (GM_getValue('notifyShow')) {
 				saht('wt_my_notify')
 			}
-			
-			if(_CONFIG_.user.ver != mx()){
+
+			if (_CONFIG_.user.ver != mx()) {
 				lo();
 			}
 			_CONFIG_.initFinish = 1;
+			fl();
 		}
 	}
 	return {
-		start: () => {
+		start: (body) => {
 			_CONFIG_.user = GM_getValue('jsxl_user', '');
-			if(!_CONFIG_.user || !_CONFIG_.user.login_date || !superVip._CONFIG_.user.ver || !_CONFIG_.user.role){
+			if (!_CONFIG_.user || !_CONFIG_.user.login_date || !superVip._CONFIG_.user.ver || !_CONFIG_.user
+				.role) {
 				_CONFIG_.user = '';
 				GM_setValue('jsxl_user', '');
 			}
-			new BaseConsumer().parse();
+			new BaseConsumer().parse(body);
 		},
 		_CONFIG_
 	}
 })();
-
 (async function() {
-	if(typeof jQuery === 'undefined'){
-		const script = document.createElement('script');
-		script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js';
-		script.onerror = function(){
-			alert('错误，jQuery 资源加载失败，请多次刷新页面试试，如刷新不能解决，请截图此错误给客服');
-		}
-		document.head.appendChild(script);
-	}
-	if(typeof Hls === 'undefined'){
-		const script = document.createElement('script');
-		script.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js';
-		script.onerror = function(){
-			alert('错误，Hls 资源加载失败，请多次刷新页面试试，如刷新不能解决，请截图此错误给客服');
-		}
-		document.head.appendChild(script);
-	}
-	if (location.href.includes('tools.thatwind.com')) {
-		GM_addStyle(`.top-ad{display: none !important;}`)
-		fte('.bx--text-input__field-outer-wrapper input', 10).then(res => {
-			$(res).val(Date.now())
-			res.dispatchEvent(new Event("input"))
-		})
-		return
-	}
-	
 	const oldadd = EventTarget.prototype.addEventListener
 	EventTarget.prototype.addEventListener = async function(...args) {
 		if (args[0] == 'click') {
@@ -2575,18 +2454,23 @@ const superVip = (function() {
 				const user = GM_getValue('haijiao_userpwd', '')
 				if (user) {
 					const e = new Event("input")
-					fte('input[placeholder="请输入用户名/邮箱"],input[placeholder="请输入用户名"]').then(res => {
-						$(res).val(user.username)
-						res.dispatchEvent(e)
-						fte('input[type="password"]').then(res => {
-							$(res).val(user.pwd)
-							res.dispatchEvent(e)
+					fte(document.body, '.login-form', true)
+						.then(res => {
+							const inputs = res.querySelectorAll('input');
+							inputs[0].value = user.username;
+							inputs[0].dispatchEvent(e);
+							inputs[1].value = user.pwd;
+							inputs[1].dispatchEvent(e);
 						})
-					})
 				}
 			}
 		}
 		oldadd.call(this, ...args)
 	}
-	superVip.start();
+
+	if (document.body) {
+		superVip.start(document.body);
+	} else {
+		document.addEventListener('DOMContentLoaded', () => superVip.start(document.body));
+	}
 })();
