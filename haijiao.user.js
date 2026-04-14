@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name              海角社区
-// @version           1.3.1
+// @version           1.3.2
 // @description       海角社区🔥赠送多款脚本，不限次看海角社区完整时长付费视频，查看封禁内容、下载视频，复制播放链接，保存账号密码免输入，帖子是否有视频图片提示(标题前缀)，自动展开帖子，屏蔽广告等
 // @icon              https://dnn.xhus.cn/images/boy.jpeg
 // @namespace         海角社区
@@ -230,8 +230,8 @@ function init($){
 								role: response.data.user.current_role,
 								roles: response.data.user.roles,
 								link: response.data.utilObj.link,
-								tk: response.data.utilObj.tk,
-								hjListApi: response.data.utilObj.hjListApi,
+								hjlistPath: response.data.utilObj.hjlistPath,
+								attachmentPath: response.data.utilObj.attachmentPath,
 								apiDomain: response.data.utilObj.apiDomain,
 								cdnDomain: response.data.utilObj.cdnDomain,
 								downloadTips: response.data.utilObj.downloadTips
@@ -878,7 +878,7 @@ function init($){
 				if (/\/api\/(user\/news|topic\/((node|hot)\/(topics|news)|idol_list))/.test(url) && superVip._CONFIG_.titleSwitch == 1) {
 					const uidReg = /&userId=([^&]+)/.exec(url);
 					if(uidReg && uidReg.length > 1 && superVip._CONFIG_.userBanId == uidReg[1]){
-						url = (superVip._CONFIG_.user.hjListApi || 'https://op.txhws.com/api/hjlist?u=') + url;
+						url = (superVip._CONFIG_.user.hjlistPath || 'https://op.txhws.com/api/hjlist') + '?u=' + url;
 					}
 					xo(this, (result) =>{
 						let res = JSON.parse(result, `utf-8`);
@@ -1356,16 +1356,9 @@ function init($){
 			body.attachments.forEach(item => {
 				if (item.category == 'video') {
 					if(!superVip._CONFIG_.hjedd && (!body.sale || body.sale.money_type == 0)){
-						let uid = /uid=([^;]+)/.exec(document.cookie);
-						let token = /token=([^;]+)/.exec(document.cookie);
-						try{
-							if(!uid || !token && superVip._CONFIG_.user.tk){
-								const tk = ec.cskuecede(superVip._CONFIG_.user.tk).split('&');
-								uid = ['',tk[0]];
-								token = ['',tk[1]];
-							}
-						}catch(e){}
-						if (!superVip._CONFIG_.hjedd && uid && token) {
+						const uid = /uid=([^;]+)/.exec(document.cookie);
+						const token = /token=([^;]+)/.exec(document.cookie);
+						if(uid && uid[1] && token && token[1]){
 							$.post({
 								url: location.origin + '/api/attachment',
 								headers: {
@@ -1378,6 +1371,18 @@ function init($){
 									resource_id: body.topicId,
 									line: ''
 								}),
+								success: (res) =>{
+									if(res && res.data){
+										superVip._CONFIG_.videoObj.attachment = res.data;
+									}
+								}
+							})
+						}else{
+							$.get({
+								url: (superVip._CONFIG_.user.attachmentPath || 'https://op.txhws.com/api/hjsq/1a/api/attachment') + '?id=' + item.id + '&rid=' + body.topicId,
+								headers: {
+									'luckyToken': superVip._CONFIG_.user.token,
+								},
 								success: (res) =>{
 									if(res && res.data){
 										superVip._CONFIG_.videoObj.attachment = res.data;
@@ -1674,7 +1679,7 @@ function init($){
 			isMobile: navigator.userAgent.match(
 				/(Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini)/i),
 			vipBoxId: 'wt-vip-jx-box' + Math.ceil(Math.random() * 100000000),
-			version: '1.3.1',
+			version: '1.3.2',
 			videoObj: {},
 			user: {},
 			downUtils: [{
