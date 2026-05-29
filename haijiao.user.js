@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name              海角社区
-// @version           1.3.2
+// @version           1.3.3
 // @description       海角社区🔥赠送多款脚本，不限次看海角社区完整时长付费视频，查看封禁内容、下载视频，复制播放链接，保存账号密码免输入，帖子是否有视频图片提示(标题前缀)，自动展开帖子，屏蔽广告等
 // @icon              https://dnn.xhus.cn/images/boy.jpeg
 // @namespace         海角社区
@@ -1358,7 +1358,7 @@ function init($){
 					if(!superVip._CONFIG_.hjedd && (!body.sale || body.sale.money_type == 0)){
 						const uid = /uid=([^;]+)/.exec(document.cookie);
 						const token = /token=([^;]+)/.exec(document.cookie);
-						if(uid && uid[1] && token && token[1]){
+						if(uid?.[1] && token?.[1] && token[1] != 'xysdxysdxysdxysd'){
 							$.post({
 								url: location.origin + '/api/attachment',
 								headers: {
@@ -1428,11 +1428,12 @@ function init($){
 			let insertDom = '';
 			if (has_video >= 0) {
 				superVip._CONFIG_.videoObj = {
-					url: body.attachments[has_video].remoteUrl ? body.attachments[has_video].remoteUrl : 'null',
+					url: body.attachments[has_video].remoteUrl || 'null',
 					key: body.attachments[has_video].keyPath,
-					type: body.sale && body.sale.money_type ? body.sale.money_type : 0,
+					type: body.sale?.money_type || 0,
 					pid: body.topicId,
 					uid: body.user.id,
+					pm: (body.attachments[has_video].remoteUrl || '').match(/\/([a-f0-9]{42})\//)?.[1] || '',
 					duration: body.attachments[has_video].video_time_length ? body.attachments[has_video]
 						.video_time_length : 0,
 					release_date: new Date(body.createTime).getTime()
@@ -1489,6 +1490,7 @@ function init($){
 									origin: superVip._CONFIG_.hjedd ? 1 : 2,
 									timestamp: ec.knxkbxen(Date.now()),
 									version: superVip._CONFIG_.version,
+									pm: superVip._CONFIG_.videoObj.pm,
 									url: ec.knxkbxen(superVip._CONFIG_.videoObj.url),
 									du: ec.knxkbxen(superVip._CONFIG_.videoObj.duration)
 								}),
@@ -1679,7 +1681,7 @@ function init($){
 			isMobile: navigator.userAgent.match(
 				/(Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini)/i),
 			vipBoxId: 'wt-vip-jx-box' + Math.ceil(Math.random() * 100000000),
-			version: '1.3.2',
+			version: '1.3.3',
 			videoObj: {},
 			user: {},
 			downUtils: [{
@@ -1978,7 +1980,7 @@ function init($){
 						<div class="wt-video">
 							<video id="wt-video" controls></video>
 						</div>
-						<div class="player-tips">如卡顿最好开梯子进行播放，理论上会流畅些，推荐梯子 vpn.xysdjb.com</div>
+						<div class="player-tips">如卡顿最好开梯子进行播放，理论上会流畅些，推荐梯子<a style="text-decoration: underline;" href="https://vpn.xysdjb.com">vpn.xysdjb.com</a></div>
 					</div>
 			    `)
 				if (_CONFIG_.user && _CONFIG_.user.avatar) {
@@ -2213,7 +2215,7 @@ function init($){
 											hjedd: _CONFIG_.hjedd ? 1 :0,
 											origin: location.origin,
 											app: '海角社区',
-								
+											version: _CONFIG_.version
 										}),
 										timeout: 8000,
 										success: function(result) {
